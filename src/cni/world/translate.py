@@ -481,6 +481,22 @@ def _pair_ents(senses: list[Sense]) -> list[str]:
     return ents
 
 
+def _polar_anchored(
+    machine: MachineWorld, senses: list[Sense], known_opens: set[str]
+) -> bool:
+    ents = _pair_ents(senses)
+    if len(ents) < 2:
+        return False
+    left = ents[0]
+    fresh = any(
+        sense.open
+        and sense.name not in known_opens
+        and sense.name not in machine.domain
+        for sense in senses
+    )
+    return not fresh or left in known_opens
+
+
 def _hear_polar(machine: MachineWorld, senses: list[Sense], names: list[str]) -> bool:
     ents = _pair_ents(senses)
     if len(ents) < 2:
@@ -612,10 +628,17 @@ def speak_query(machine: MachineWorld, lex: Lex | None = None) -> str | None:
                     return got
         return None
     if "who" in slots:
-        return first_dst(
-            form("ask.who"),
-            _find(machine, f"find(?x, isa({sub}, x) ∧ isa(x, person))"),
-        )
+        hits = _find(machine, f"find(?x, isa({sub}, x) ∧ isa(x, person))")
+        called = _find(
+            machine, f"find(?ev, of(do, ev, {sub}) ∧ isa(ev, call))"
+        ) or _find(machine, f"find(?ev, of(to, ev, {sub}) ∧ isa(ev, call))")
+        mark = "ask.who" if called else "say.copula"
+        got = first_dst(form(mark), hits)
+        if got:
+            return got
+        if _yes(machine, f"isa({sub}, person)"):
+            return form(sub)
+        return None
     if "what" in slots and "has" in slots:
         return first_dst(form("ask.has"), _find(machine, f"find(?x, of(has, {sub}, x))"))
     if "how" in slots:
@@ -687,10 +710,14 @@ def _apply_use(
 
 def hear(machine: MachineWorld, senses: list[Sense]) -> bool:
     senses = _bind_ana(machine, senses)
+    names = [sense.name for sense in senses]
+    known_opens = set(_open_known(machine))
+    if "ask" in names and not any(name in _QUERY for name in names):
+        if not _polar_anchored(machine, senses, known_opens):
+            return False
     for sense in senses:
         if sense.open:
             _ensure(machine, sense.name)
-    names = [sense.name for sense in senses]
     opens = [sense.name for sense in senses if sense.open]
     pol = "no" if "no" in names else "yes"
     asking = "ask" in names or any(name in _QUERY for name in names)

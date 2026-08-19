@@ -29,6 +29,11 @@
 #   year       y.DIGITS            spoken as DIGITS
 #   closed     names listed in base.tm
 #
+# Default content (no learning)
+#   greet              你好 / hello
+#   isa(me, 机器语言TM) 你是谁 / who are you → 我是机器语言TM
+#   Closed names and rels in base.tm are grammar, not taught facts.
+#
 # Event paradigm (verbs and speech acts)
 #   ! e.1 : e
 #   + isa(e.1, invent)

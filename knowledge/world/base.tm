@@ -12,6 +12,11 @@
 ! this : e
 ! that : e
 
+# Default content. No learning yet: greet, and me is 机器语言TM.
+! 机器语言TM : e
++ isa(me, 机器语言TM)
++ isa(机器语言TM, person)
+
 ! do : e
 ! to : e
 ! at : e

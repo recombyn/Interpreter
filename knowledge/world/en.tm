@@ -83,6 +83,7 @@ lex en {
 
   out me I
   out other you
+  out 机器语言TM 机器语言TM
   out this this
   out that that
   out here here

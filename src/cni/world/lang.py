@@ -138,19 +138,27 @@ def load_rules(path: Path | None = None) -> tuple[Rule, ...]:
 def save_world(machine: MachineWorld, path: Path | None = None) -> None:
     path = path or MEMORY_PATH
     kernel = set()
+    stock = set()
     for raw in BASE_PATH.read_text(encoding="utf-8").splitlines():
         line = _clean(raw)
         if line.startswith("!"):
             kernel.add(line[1:].split(":", 1)[0].strip())
+        elif line.startswith("+"):
+            stock.add(line)
     lines: list[str] = ["# remembered world"]
     for name, sort in machine.domain.items():
         if name not in kernel:
             lines.append(f"! {name} : {sort}")
     for fact in sorted(machine.facts, key=lambda item: (item.pred, item.args)):
         if fact.pred == "isa":
-            lines.append(f"+ isa({fact.args[0]}, {fact.args[1]})")
+            told = f"+ isa({fact.args[0]}, {fact.args[1]})"
         elif fact.pred == "of":
-            lines.append(f"+ of({', '.join(fact.args)})")
+            told = f"+ of({', '.join(fact.args)})"
+        else:
+            continue
+        if told in stock:
+            continue
+        lines.append(told)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

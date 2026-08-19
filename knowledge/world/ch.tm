@@ -103,6 +103,7 @@ lex ch {
 
   out me 我
   out other 你
+  out 机器语言TM 机器语言TM
   out this 这
   out that 那
   out here 这

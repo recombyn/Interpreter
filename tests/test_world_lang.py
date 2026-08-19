@@ -115,6 +115,10 @@ def test_hello_is_a_greet_act():
     assert world.apply(parse_msg("? of(do, e.1, other)")) is True
     assert world.apply(parse_msg("? of(to, e.1, me)")) is True
     assert turn(boot(), "你好") == "你好"
+    assert turn(boot(), "你是谁") == "我是机器语言TM"
+    assert boot().apply(parse_msg("? isa(me, 机器语言TM)")) is True
+    assert turn(boot(), "你在干嘛") is None
+    assert turn(boot(), "电脑是机器吗") is None
 
 
 def test_greet_speak_uses_to_and_kind():
