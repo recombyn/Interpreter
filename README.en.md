@@ -144,7 +144,9 @@ src/cni/
   data/world/  # bundled world data (lang/base/lex/form/rules)
 knowledge/
   user/        # user lexicon (Table 2)
-docs/          # Vite docs site (content/zh-CN · content/en)
+docs/
+  rules.en.md / 规则全表.md
+  guide.en.md / 指南.md
 ```
 
 ## Boundaries
@@ -156,6 +158,6 @@ docs/          # Vite docs site (content/zh-CN · content/en)
 
 ## Docs
 
-- **Live site**: [recombyn.github.io/concept-network-interpreter](https://recombyn.github.io/concept-network-interpreter/)
-- **Local preview**: `cd docs && npm install && npm run dev`
+- **Rule catalog**: [docs/rules.en.md](docs/rules.en.md) (Chinese patterns: [规则全表.md](docs/规则全表.md))
+- **Architecture & guide**: [docs/guide.en.md](docs/guide.en.md)
 - **中文**: [README.md](README.md)

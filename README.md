@@ -144,7 +144,9 @@ src/cni/
   data/world/  # 引擎自带世界数据（lang/base/lex/form/rules）
 knowledge/
   user/        # 用户词典（表2）
-docs/          # Vite 文档站（content/zh-CN · content/en）
+docs/
+  规则全表.md / rules.en.md
+  指南.md / guide.en.md
 ```
 
 ## 设计边界
@@ -156,6 +158,6 @@ docs/          # Vite 文档站（content/zh-CN · content/en）
 
 ## 文档
 
-- **在线文档**：[recombyn.github.io/concept-network-interpreter](https://recombyn.github.io/concept-network-interpreter/)
-- **本地预览**：`cd docs && npm install && npm run dev`
-- **English**：[README.en.md](README.en.md)
+- **规则逐条明细**：[docs/规则全表.md](docs/规则全表.md)
+- **架构与使用指南**：[docs/指南.md](docs/指南.md)
+- **English**：[README.en.md](README.en.md) · [docs/guide.en.md](docs/guide.en.md) · [docs/rules.en.md](docs/rules.en.md)
