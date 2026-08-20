@@ -1,16 +1,10 @@
 # CNI — Concept Network Interpreter
 
-[中文](#中文) | [English](#english)
-
----
-
-<a id="中文"></a>
-
-## 中文
+[English](README.en.md) · 中文
 
 > 人话 → 符号规则引擎 → 世界事实。**无大模型，无正则黑盒。**
 
-### 这是什么
+## 这是什么
 
 CNI 是一个**纯符号推理的中文语言理解引擎**。
 
@@ -24,7 +18,7 @@ CNI 是一个**纯符号推理的中文语言理解引擎**。
 → 引擎查询并回答："电脑是机器"
 ```
 
-### 为什么开发它
+## 为什么开发它
 
 **问题**
 
@@ -43,7 +37,7 @@ CNI 的设计目标是：**可控、可解释、可扩展、零幻觉**。
 - 语法规则是代码，知识是文件，两者分离
 - 在资源受限或隐私敏感的场景下可独立运行
 
-### 与其他方案对比
+## 与其他方案对比
 
 | 能力 | 正则 | 传统 NLP | 大模型（LLM） | **CNI** |
 | --- | --- | --- | --- | --- |
@@ -57,7 +51,7 @@ CNI 的设计目标是：**可控、可解释、可扩展、零幻觉**。
 | 用户可扩展词典 | ✗ | △ | ✗ | ✓（`user_dict.tm`） |
 | 知识边界清晰 | ✓ | △ | ✗ | ✓ |
 
-### 设计原理
+## 设计原理
 
 **流水线**
 
@@ -98,7 +92,7 @@ of(content, 静夜思, 床前明月光) # 内容
 表1 是算法，不是查表——用户改不了也不需要改。  
 表2 是词典，用户按需自定义。
 
-### 能干什么
+## 能干什么
 
 - **教知识**：用自然语言输入事实，引擎解析并持久化
 - **问知识**：用自然语言提问，引擎查询已有事实并回答
@@ -108,7 +102,7 @@ of(content, 静夜思, 床前明月光) # 内容
 - **记忆追踪**：维护对话焦点栈，正确处理代词指代
 - **推理链**：支持 `isa` 继承链追溯（深度 ≤ 2 层）
 
-### 快速开始
+## 快速开始
 
 ```bash
 pip install -e ".[dev]"
@@ -133,7 +127,7 @@ python -m pytest
 
 在 `repl` 中，以 `教|记住|学习|记` 开头自动触发写库，其余为只读查询。
 
-### 自定义词典
+## 自定义词典
 
 编辑 `knowledge/user/user_dict.tm`，格式：
 
@@ -143,191 +137,25 @@ map check 检查
 map 偶 我
 ```
 
-### 目录结构
+## 目录结构
 
 ```
 src/cni/
   data/world/  # 引擎自带世界数据（lang/base/lex/form/rules）
 knowledge/
   user/        # 用户词典（表2）
-docs/
-  规则全表.md   # 表1 逐条说明（中英）
-  指南.md       # 架构与使用指南（中英）
+docs/          # Vite 文档站（content/zh-CN · content/en）
 ```
 
-### 设计边界
+## 设计边界
 
 - 未教过的事实**一律不猜**，返回“我不了解这个信息”
 - 不做开放域闲聊（非学习路径不写库）
 - 不做诗词赏析（I11 拦截）
 - `isa` 链推理深度上限 2 层，不做全图遍历
 
-### 文档
+## 文档
 
-- **规则逐条明细**：[docs/规则全表.md](docs/规则全表.md)
-- **架构与使用指南**：[docs/指南.md](docs/指南.md)
-
----
-
-<a id="english"></a>
-
-## English
-
-> Natural language → symbolic rule engine → world facts. **No LLM. No regex black box.**
-
-### What this is
-
-CNI is a **purely symbolic Chinese language understanding engine**.
-
-You teach it knowledge in natural language; it answers in natural language. There is no neural network underneath—only a readable, auditable, extensible set of symbolic rules.
-
-```
-You say: "电脑是机器"
-→ Engine records: isa(电脑, 机器)
-
-You ask: "电脑是什么"
-→ Engine answers: "电脑是机器"
-```
-
-### Why it exists
-
-**Problem**
-
-| Approach | Limitation |
-| --- | --- |
-| Regex / keyword matching | Narrow coverage; maintenance explodes with input variants |
-| Traditional NLP (tokenize + POS + dependency) | Heavy toolchain; brittle generalization; rules hard to change |
-| Large language models (LLMs) | Hallucination, opacity, high cost, hard to audit precisely |
-
-**Goals**
-
-CNI aims to be **controllable, explainable, extensible, and hallucination-free**.
-
-- It only knows what you taught it—no guessing, no invention
-- Every inference path is traceable (`--trace`)
-- Grammar rules live in code; knowledge lives in files
-- Runs offline in resource-constrained or privacy-sensitive settings
-
-### Comparison
-
-| Capability | Regex | Traditional NLP | LLM | **CNI** |
-| --- | --- | --- | --- | --- |
-| Understand NL structure | ✗ | △ (corpus-trained) | ✓ | ✓ (symbolic rules) |
-| Auditable results | ✓ | △ | ✗ (black box) | ✓ (step-by-step) |
-| Zero hallucination | ✓ | △ | ✗ | ✓ |
-| Many constructions (ba/bei, questions, complexes…) | ✗ | △ | ✓ | ✓ (65 D-rules) |
-| Typo / homophone correction | ✗ | △ | ✓ | ✓ (E-series) |
-| Dialect / colloquial input | ✗ | ✗ | ✓ | ✓ (F/G-series) |
-| No internet / no API cost | ✓ | ✓ | ✗ | ✓ |
-| User-extensible lexicon | ✗ | △ | ✗ | ✓ (`user_dict.tm`) |
-| Clear knowledge boundary | ✓ | △ | ✗ | ✓ |
-
-### Design
-
-**Pipeline**
-
-```
-Input
- │
- ▼
-E (fix) → user_dict → F41–50 (word order) → G (quantity/time) → I (social intercept)
- │                                                                      │
- │ (pass-through)                                                       │ (hit → reply)
- ▼
-D (syntactic decode: 65 rules)
- │
- ▼
-Kernel (RO routing / WC consistency / QP query / MEM memory / REN render)
- │
- ▼
-Output (natural language)
-```
-
-**Fact shape (on disk)**
-
-```
-isa(电脑, 机器)              # class membership
-located(电脑, 桌上)          # location
-has(我, 电脑)                # possession
-of(kind, e.1, 发明)          # event role
-of(content, 静夜思, 床前明月光) # content
-```
-
-**Rule layers**
-
-| Layer | Content | Count | Owner |
-| --- | --- | --- | --- |
-| **Table 1 (hard-coded)** | Syntax / fix / order / time / social core algorithms | 110 | Engine kernel |
-| **Table 2 (user)** | Abbreviations, dialect, CN–EN mix, emoji maps, etc. | 54 | `user_dict.tm` |
-
-Table 1 is algorithm, not a lookup table—users neither can nor need to edit it.  
-Table 2 is a lexicon you customize as needed.
-
-### What you can do
-
-- **Teach**: state facts in natural language; the engine parses and persists them
-- **Ask**: query in natural language against stored facts
-- **Complex syntax**: ba/bei constructions, cause/contrast/condition complexes, questions, etc.
-- **Tolerant input**: typos, homophones, extra characters
-- **Colloquial Chinese**: Cantonese order, fuzzy quantities, relative dates
-- **Focus memory**: pronoun resolution via a dialogue focus stack
-- **Inference**: `isa` inheritance chains (depth ≤ 2)
-
-### Quick start
-
-```bash
-pip install -e ".[dev]"
-
-# Teach
-python -m cni teach "电脑是机器"
-python -m cni teach "静夜思的内容是床前明月光"
-
-# Query
-python -m cni reply "电脑是什么"
-python -m cni reply "静夜思的内容是什么"
-
-# Interactive
-python -m cni repl
-
-# Debug (show inference chain)
-python -m cni reply "电脑是什么" --trace
-
-# Tests
-python -m pytest
-```
-
-In `repl`, lines starting with `教|记住|学习|记` write to the world; everything else is read-only query.
-
-### Custom lexicon
-
-Edit `knowledge/user/user_dict.tm`:
-
-```
-map yyds 永远的神
-map check 检查
-map 偶 我
-```
-
-### Layout
-
-```
-src/cni/
-  data/world/  # bundled world data (lang/base/lex/form/rules)
-knowledge/
-  user/        # user lexicon (Table 2)
-docs/
-  规则全表.md   # Table 1 rule-by-rule (ZH/EN)
-  指南.md       # architecture & usage guide (ZH/EN)
-```
-
-### Boundaries
-
-- Untaught facts are **never guessed**; reply is “我不了解这个信息”
-- No open-domain chit-chat writes (non-teach paths do not persist)
-- No poetry appreciation (I11 intercept)
-- `isa` chain depth capped at 2; no full-graph walk
-
-### Docs
-
-- **Rule catalog**: [docs/规则全表.md](docs/规则全表.md)
-- **Architecture & guide**: [docs/指南.md](docs/指南.md)
+- **在线文档**：[recombyn.github.io/concept-network-interpreter](https://recombyn.github.io/concept-network-interpreter/)
+- **本地预览**：`cd docs && npm install && npm run dev`
+- **English**：[README.en.md](README.en.md)

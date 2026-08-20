@@ -19,3 +19,7 @@ runtime/*.tm
 knowledge/**/*.txt
 knowledge/**/design.*
 *系列.txt
+
+# Docs site
+docs/node_modules/
+docs/dist/
