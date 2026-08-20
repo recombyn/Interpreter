@@ -98,7 +98,7 @@ Extras D66 / D67 / D69 / I11 / MEM4 are kernel extensions and do not change the 
 </tr>
 <tr>
 <td align="left">D68</td>
-<td align="left">**Retired / split** — not a live rule. Short-ask → MEM4; compliance → D69. No open full-text search.</td>
+<td align="left"><strong>Retired / split</strong> — not a live rule. Short-ask → MEM4; compliance → D69. No open full-text search.</td>
 </tr>
 <tr>
 <td align="left">D69</td>
@@ -155,8 +155,8 @@ There is **no D68 open-search rule**. Triggers in `rules.tm` (e.g. `合法吗|�
 <td align="left">Table 1</td>
 </tr>
 <tr>
-<td align="left">**Table 1 total**</td>
-<td align="center">**110**</td>
+<td align="left"><strong>Table 1 total</strong></td>
+<td align="center"><strong>110</strong></td>
 <td align="left"></td>
 </tr>
 <tr>

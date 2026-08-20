@@ -26,73 +26,73 @@ The kernel does **not** rewrite `located`/`has` into `of(located,…)` / `of(has
 </thead>
 <tbody>
 <tr>
-<td align="left">**D**</td>
+<td align="left"><strong>D</strong></td>
 <td align="center">D1–D65</td>
 <td align="left">Syntax: SVO, ba/bei, causative/serial, existential, complexes, questions, negation, ellipsis, deixis, modality (65)</td>
 <td align="left">Sentence-splitting; in kernel</td>
 </tr>
 <tr>
-<td align="left">**E**</td>
+<td align="left"><strong>E</strong></td>
 <td align="center">E1–E5</td>
 <td align="left">Input repair: exact match, homophone pin, typo replace, multi-char delete (never insert missing chars)</td>
 <td align="left">Edit-distance / pinyin; in kernel</td>
 </tr>
 <tr>
-<td align="left">**F**</td>
+<td align="left"><strong>F</strong></td>
 <td align="center">F41–F50</td>
 <td align="left">Dialect order rewrite (e.g. “食先”→“先食”, “有V”→“曾V过”) — 10 rules</td>
 <td align="left">Regex shift; in kernel</td>
 </tr>
 <tr>
-<td align="left">**G**</td>
+<td align="left"><strong>G</strong></td>
 <td align="center">G1–G10</td>
 <td align="left">Entity normalize (“10w”→“100000”, “明天”→ absolute date, “几十”→“30”, …)</td>
 <td align="left">Math + timestamp; in kernel</td>
 </tr>
 <tr>
-<td align="left">**I**</td>
+<td align="left"><strong>I</strong></td>
 <td align="center">I1–I3</td>
 <td align="left">Social intercept (“谢谢/你好/再见” fixed replies; skip D)</td>
 <td align="left">Control-flow; EN greetings via user lexicon</td>
 </tr>
 <tr>
-<td align="left">**I**</td>
+<td align="left"><strong>I</strong></td>
 <td align="center">I7–I8</td>
 <td align="left">Punctuation collapse (“!!!”→“!”, “??”→“?”)</td>
 <td align="left">Text cleaning; in kernel</td>
 </tr>
 <tr>
-<td align="left">**I**</td>
+<td align="left"><strong>I</strong></td>
 <td align="center">I10</td>
 <td align="left">One-char completion (“哦”→“我知道了”; fill `other` as agent)</td>
 <td align="left">Default subject fill; in kernel</td>
 </tr>
 <tr>
-<td align="left">**System**</td>
+<td align="left"><strong>System</strong></td>
 <td align="center">RO1–RO3</td>
 <td align="left">Op routing: teach trigger, default chat, no soft-fail</td>
 <td align="left">Engine behavior</td>
 </tr>
 <tr>
-<td align="left">**System**</td>
+<td align="left"><strong>System</strong></td>
 <td align="center">WC1–WC3</td>
 <td align="left">World consistency: ignore dupes, keep contradictions, precise drop</td>
 <td align="left">Data management</td>
 </tr>
 <tr>
-<td align="left">**System**</td>
+<td align="left"><strong>System</strong></td>
 <td align="center">QP1–QP3</td>
 <td align="left">Query priority: explicit > inferred > session > log; isa depth 2; WH roles</td>
 <td align="left">Query ranking</td>
 </tr>
 <tr>
-<td align="left">**System**</td>
+<td align="left"><strong>System</strong></td>
 <td align="left">MEM1–MEM3</td>
 <td align="left">Memory: focus stack len 5; events durable / session temp; reset clears</td>
 <td align="left">Memory management</td>
 </tr>
 <tr>
-<td align="left">**System**</td>
+<td align="left"><strong>System</strong></td>
 <td align="left">REN1–REN2</td>
 <td align="left">Render fallback: bare surface if no template; empty-result phrase</td>
 <td align="left">Output fallback</td>
@@ -117,25 +117,25 @@ Lookup mappings (historical series IDs); maintained in `knowledge/user/user_dict
 </thead>
 <tbody>
 <tr>
-<td align="left">**F**</td>
+<td align="left"><strong>F</strong></td>
 <td align="center">F1–F40</td>
 <td align="left">Net slang, dialect words (40)</td>
 <td align="left">`user_dict.tm`</td>
 </tr>
 <tr>
-<td align="left">**H**</td>
+<td align="left"><strong>H</strong></td>
 <td align="center">H1–H10</td>
 <td align="left">CN–EN mix (check→检查, …) (10)</td>
 <td align="left">Same; EN→ZH before I/D</td>
 </tr>
 <tr>
-<td align="left">**I**</td>
+<td align="left"><strong>I</strong></td>
 <td align="center">I4–I6</td>
 <td align="left">Emoji→mood (3)</td>
 <td align="left">`user_dict.tm`</td>
 </tr>
 <tr>
-<td align="left">**I**</td>
+<td align="left"><strong>I</strong></td>
 <td align="center">I9</td>
 <td align="left">“好吧”→“接受”</td>
 <td align="left">`user_dict.tm`</td>
@@ -264,37 +264,37 @@ docs/guide.en.md / 指南.md
 <tr>
 <td align="left">`{doc}.tm` + `.content/`</td>
 <td align="left">`python -m cni.tools.sync_user_docs` (`--force` ok)</td>
-<td align="left">**Full**: line entities + shards for D66/D67</td>
+<td align="left"><strong>Full</strong>: line entities + shards for D66/D67</td>
 </tr>
 <tr>
 <td align="left">`劳动法/article.maps.tm`</td>
 <td align="left">`python -m cni.tools.compile_labor_articles --write`</td>
-<td align="left">**Full**: `map 第八条 → 第N行`; merged into lexicon</td>
+<td align="left"><strong>Full</strong>: `map 第八条 → 第N行`; merged into lexicon</td>
 </tr>
 <tr>
 <td align="left">Caps in `limits.tm`</td>
 <td align="left">`python -m cni.tools.compile_limits --write`</td>
-<td align="left">**Semi**: scrape 「不得超过/不少于…」 using `rules.tm` topics; editable</td>
+<td align="left"><strong>Semi</strong>: scrape 「不得超过/不少于…」 using `rules.tm` topics; editable</td>
 </tr>
 <tr>
 <td align="left">`许可` / `书面约定` in `limits.tm`</td>
 <td align="left">Same tool may append a fixed sample block; or hand-write</td>
-<td align="left">**Not** reliably extracted from statute text</td>
+<td align="left"><strong>Not</strong> reliably extracted from statute text</td>
 </tr>
 <tr>
 <td align="left">`**/rules.tm` (`rule` / `tier`)</td>
 <td align="left">Hand-write</td>
-<td align="left">**Never auto**: judgment shape + triggers</td>
+<td align="left"><strong>Never auto</strong>: judgment shape + triggers</td>
 </tr>
 <tr>
 <td align="left">`user_dict.tm` / `form.tm` / `config.tm`</td>
 <td align="left">Hand-write</td>
-<td align="left">**Never auto** (aside from `*.maps.tm`)</td>
+<td align="left"><strong>Never auto</strong> (aside from `*.maps.tm`)</td>
 </tr>
 <tr>
 <td align="left">`labor_law.tm`</td>
 <td align="left">Hand-write (optional mini-graph)</td>
-<td align="left">**Never auto**; distinct from line-index `劳动法.tm`</td>
+<td align="left"><strong>Never auto</strong>; distinct from line-index `劳动法.tm`</td>
 </tr>
 </tbody>
 </table>
@@ -353,27 +353,27 @@ Suggested order for labor law: drop `劳动法.text` → `sync_user_docs` → `c
 </tr>
 <tr>
 <td align="left">`rule …`</td>
-<td align="left">**`rules.tm` only**</td>
+<td align="left"><strong>`rules.tm` only</strong></td>
 <td align="left">D69 judgment</td>
 </tr>
 <tr>
 <td align="left">`tier …`</td>
-<td align="left">**`rules.tm` only**</td>
+<td align="left"><strong>`rules.tm` only</strong></td>
 <td align="left">Tiered cap</td>
 </tr>
 <tr>
 <td align="left">`map a b`</td>
-<td align="left">**`user_dict.tm` only**</td>
+<td align="left"><strong>`user_dict.tm` only</strong></td>
 <td align="left">Rewrite</td>
 </tr>
 <tr>
 <td align="left">`out name surface`</td>
-<td align="left">**`form.tm` only**</td>
+<td align="left"><strong>`form.tm` only</strong></td>
 <td align="left">Reply override</td>
 </tr>
 <tr>
 <td align="left">config keys</td>
-<td align="left">**`config.tm` only**</td>
+<td align="left"><strong>`config.tm` only</strong></td>
 <td align="left">Switches</td>
 </tr>
 <tr>
@@ -490,7 +490,7 @@ Template matching is not full syntax. Practical knobs:
 </tr>
 <tr>
 <td align="left">Threshold judgment</td>
-<td align="left">**D69**: `rules.tm` + `limits.tm`; `compile_limits` extracts caps; `D69.ask` for missing value; `in` for enums</td>
+<td align="left"><strong>D69</strong>: `rules.tm` + `limits.tm`; `compile_limits` extracts caps; `D69.ask` for missing value; `in` for enums</td>
 </tr>
 <tr>
 <td align="left">Coref</td>
