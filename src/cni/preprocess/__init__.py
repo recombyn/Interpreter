@@ -210,6 +210,24 @@ def apply_g(text: str, *, today: date | None = None) -> str:
     text = re.sub(r"(\d+)\s*[kK千]", lambda m: mul(m, 1_000), text)
     text = re.sub(r"(\d+)\s*[mM]", lambda m: mul(m, 1_000_000), text)
     text = re.sub(r"(\d+)\s*百万", lambda m: mul(m, 1_000_000), text)
+    # G1–G3：中文个位数字 × 万/千/百万
+    _cn1 = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    text = re.sub(
+        r"([一二两三四五六七八九])\s*万",
+        lambda m: str(_cn1[m.group(1)] * 10_000),
+        text,
+    )
+    text = re.sub(r"十\s*万", "100000", text)
+    text = re.sub(
+        r"([一二两三四五六七八九])\s*千",
+        lambda m: str(_cn1[m.group(1)] * 1_000),
+        text,
+    )
+    text = re.sub(
+        r"([一二两三四五六七八九])\s*百万",
+        lambda m: str(_cn1[m.group(1)] * 1_000_000),
+        text,
+    )
 
     weekday_map = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6}
 

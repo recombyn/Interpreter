@@ -268,6 +268,98 @@ def test_d60_modal_tag():
     assert w.apply(parse_msg("? of(modal, e.1, 能力)")) is True
 
 
+def test_d61_able_modal():
+    w = boot()
+    s = Session()
+    got = hear(w, s, "人能吃苹果")
+    assert got.rule == "D61"
+    assert w.apply(parse_msg("? of(modal, e.1, 能力)")) is True
+
+
+def test_d58_undated_event_counts():
+    w = boot()
+    s = Session()
+    hear(w, s, "人吃苹果")
+    got = turn(w, s, "人没吃苹果")
+    assert got.rule == "D58"
+    assert got.spoken == "不是"  # 已有事件 → 过去否定为假
+
+
+def test_d49_object_ellipsis_tag():
+    w = boot()
+    s = Session()
+    hear(w, s, "人吃苹果")
+    got = hear(w, s, "人吃")
+    assert got.rule == "D49"
+    assert w.apply(parse_msg("? of(object, e.2, 苹果)")) is True
+
+
+def test_qp1_pin_below_explicit():
+    w = boot()
+    s = Session()
+    hear(w, s, "电脑是机器")
+    hear(w, s, "电脑是设备")
+    s.focus_stack = ["设备"]
+    got = turn(w, s, "电脑是什么")
+    # 同层显式按写入序；会话钉不重排显式层
+    assert got.spoken == "电脑是机器"
+
+
+def test_d54_far_deixis_no_fallback():
+    w = boot()
+    s = Session()
+    hear(w, s, "人吃苹果")
+    s.focus_stack = ["苹果"]  # 仅近指，无远指
+    got = hear(w, s, "人吃那个")
+    # D54 空远指时不回退近指；不得标 D49 用 focus[0] 补宾语
+    assert got.rule != "D49"
+
+
+def test_qp2_isa_depth_lock():
+    w = boot()
+    w.ensure("甲")
+    w.ensure("乙")
+    w.ensure("丙")
+    w.ensure("丁")
+    w.tell("isa(甲, 乙)")
+    w.tell("isa(乙, 丙)")
+    w.tell("isa(丙, 丁)")
+    assert w.yes("isa(甲, 丙)")  # 祖父层
+    assert not w.yes("isa(甲, 丁)")  # 不推曾祖父
+
+
+def test_qp3_what_as_object():
+    w = boot()
+    s = Session()
+    hear(w, s, "人吃苹果")
+    got = turn(w, s, "人吃什么")
+    assert got.spoken == "苹果"
+    assert got.rule == "D26"
+
+
+def test_ro2_turn_no_write_on_greet():
+    w = boot()
+    s = Session()
+    before = {a for a in w.facts}
+    got = turn(w, s, "你好")
+    assert got.ok
+    assert {a for a in w.facts} == before
+
+
+def test_save_world_has_located(tmp_path):
+    from cni.kernel.machine import save_world
+
+    w = boot()
+    s = Session()
+    hear(w, s, "人有电脑")
+    hear(w, s, "电脑在家里")
+    path = tmp_path / "mem.tm"
+    save_world(w, path)
+    text = path.read_text(encoding="utf-8")
+    assert "has(" in text
+    assert "located(" in text
+
+
 def test_ro3_empty_spoken():
     from cni.route import hear as hear_ro
 
@@ -378,6 +470,64 @@ def test_d19_less_property():
     assert got.rule == "D19"
     assert w.apply(parse_msg("? of(polarity, 手机, negative)")) is True
     assert w.apply(parse_msg("? of(property, 手机, 好)")) is True
+    echo = turn(w, s, "手机不如电脑")
+    assert echo.rule == "D19.echo"
+    assert "不如" in (echo.spoken or "")
+
+
+def test_d33_d34_tag_tone():
+    w = boot()
+    s = Session()
+    hear(w, s, "电脑是机器")
+    a = turn(w, s, "电脑是机器对吧")
+    assert a.rule == "D33"
+    assert "对吧" in (a.spoken or "")
+    b = turn(w, s, "电脑是机器是吗")
+    assert b.rule == "D34"
+    assert "是吗" in (b.spoken or "")
+
+
+def test_ren1_missing_pred_template(monkeypatch):
+    import cni.decode as dec
+    from cni.render import forms as forms_mod
+
+    monkeypatch.setattr(forms_mod, "form", lambda const: None)
+    monkeypatch.setattr(dec, "form_of", lambda const, lex=None: None)
+    assert dec._apply_form("say.isa", "电脑", "机器", pred="isa") == "[原始逻辑] isa(电脑,机器)"
+
+
+def test_d67_multi_content_prefers_explicit():
+    w = boot()
+    s = Session()
+    hear(w, s, "短歌行的内容是第一稿")
+    hear(w, s, "短歌行的内容是对酒当歌,人生几何")
+    got = turn(w, s, "短歌行的内容是什么")
+    assert got.rule == "D67"
+    assert got.spoken == "第一稿"  # 显式插入序首条
+
+
+def test_content_save_roundtrip(tmp_path):
+    from cni.kernel.machine import load_msgs, save_world
+
+    w = boot()
+    s = Session()
+    hear(w, s, "短歌行的内容是对酒当歌,人生几何")
+    path = tmp_path / "mem.tm"
+    save_world(w, path)
+    text = path.read_text(encoding="utf-8")
+    assert '"对酒当歌,人生几何"' in text
+    w2 = boot()
+    load_msgs(w2, path)
+    assert any(
+        a.pred == "of" and a.args == ("content", "短歌行", "对酒当歌,人生几何") for a in w2.facts
+    )
+
+
+def test_g1_chinese_wan():
+    from cni.preprocess import apply_g
+
+    assert "30000" in apply_g("三万")
+    assert "5000" in apply_g("五千")
 
 
 def test_d47_context_me():

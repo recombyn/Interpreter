@@ -205,6 +205,7 @@ def _entity(sense: Sense, session: Session) -> str | None:
         "pastneg",
         "forbid",
         "can",
+        "able",
         "must",
         "force",
         "may",
@@ -308,11 +309,15 @@ def _is_individual_name(machine: MachineWorld, name: str) -> bool:
 
 
 def _prefer(session: Session, values: tuple[str, ...] | list[str]) -> str:
-    """QP1：取 find 已排序的首项（显式>推导>…）；会话钉不压过显式。"""
+    """QP1：取 find 已排序的首项（显式>推导>会话钉>事件）。"""
     del session
     if not values:
         return ""
     return values[0]
+
+
+def _qfind(machine: MachineWorld, session: Session, query: str):
+    return machine.find(query, pins=session.focus_stack)
 
 
 def _fill_ellipsis(senses: list[Sense], session: Session, *, write: bool) -> list[Sense]:
@@ -335,10 +340,12 @@ def _fill_ellipsis(senses: list[Sense], session: Session, *, write: bool) -> lis
 
 
 def _modal(senses: list[Sense]) -> tuple[str, str]:
-    """返回 (modal常量, 规则号)。表：能力/义务/强制/可能。"""
+    """返回 (modal常量, 规则号)。D60 可以 / D61 能 / D62 应该 / D63 必须 / D64 可能。"""
     for s in senses:
         if s.name == "can":
             return "能力", "D60"
+        if s.name == "able":
+            return "能力", "D61"
         if s.name == "must":
             return "义务", "D62"
         if s.name == "force":
@@ -375,10 +382,6 @@ def _placeish(name: str, machine: MachineWorld) -> bool:
     return machine.yes(f"isa({name}, place)")
 
 
-def _say_isa(subj: str, kind: str) -> str:
-    return f"{_surf(subj)}是{_surf(kind)}"
-
-
 def _surf(name: str) -> str:
     from cni.render.forms import form as form_tm
 
@@ -395,8 +398,34 @@ def _surf(name: str) -> str:
 
 
 def _ren1(pred: str, *args: str) -> str:
-    """REN1: fact exists but no surface template."""
+    """REN1: fact exists but form.tm 无匹配模板。"""
     return f"[原始逻辑] {pred}({','.join(args)})"
+
+
+def _apply_form(key: str, *args: str, pred: str | None = None) -> str:
+    """用 form.tm / lex 模板渲染；缺模板 → REN1。"""
+    from cni.render.forms import form as form_tm
+
+    tpl = form_tm(key) or form_of(key)
+    if not tpl:
+        return _ren1(pred or key, *args)
+    out = tpl
+    for i, arg in enumerate(args):
+        out = out.replace(f"{{{i}}}", _surf(arg))
+    return out
+
+
+def _say_isa(subj: str, kind: str) -> str:
+    # identity 与 isa 同形；优先 say.isa
+    return _apply_form("say.isa", subj, kind, pred="isa")
+
+
+def _say_located(thing: str, place: str) -> str:
+    return _apply_form("say.located", thing, place, pred="located")
+
+
+def _say_has(owner: str, thing: str) -> str:
+    return _apply_form("say.has", owner, thing, pred="has")
 
 
 def _yes() -> str:
@@ -441,12 +470,17 @@ def _speak_event(machine: MachineWorld, eid: str) -> str:
     kind_surf = form_of(kind) or form_tm(kind)
     if not kind_surf:
         # REN1：有事件、无 kind 表面模板
-        parts = [eid, kind]
+        parts = ["kind", eid, kind]
         if agent:
-            parts.append(agent)
-        if obj:
-            parts.append(obj)
-        return _ren1("of", *parts)
+            parts = [eid, kind, agent] + ([obj] if obj else [])
+            return _ren1("of", *parts)
+        return _ren1("of", "kind", eid, kind)
+    # say.event {0}{1}{2} = agent + kind_surf + object
+    tpl = form_tm("say.event") or form_of("say.event")
+    if tpl:
+        a = _surf(agent) if agent else ""
+        o = _surf(obj) if obj else ""
+        return tpl.replace("{0}", a).replace("{1}", kind_surf).replace("{2}", o)
     if agent and obj:
         return f"{_surf(agent)}{kind_surf}{_surf(obj)}"
     if agent:
@@ -476,11 +510,9 @@ def _events(
         if obj and not machine.yes(f"of(object, {name}, {obj})"):
             continue
         if before_now:
-            # D58：仅保留 of(when,e,t) 且 t < now 的事件；无 when 则不计入过去否定命中
+            # D58：有 when 且 < today 计入；无 when 的事件也计入（否则「没」误判）
             whens = machine.find(f"?x of(when, {name}, x)")
-            if not whens.values:
-                continue
-            if not any(t < today for t in whens.values):
+            if whens.values and not any(t < today for t in whens.values):
                 continue
         if kind or agent or obj:
             out.append(name)
@@ -665,26 +697,24 @@ def _try_d67(machine: MachineWorld, session: Session, text: str) -> Result | Non
         return Result(ok=False, err="D67 needs entity", rule="D67")
     if entity not in machine.domain:
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
-    # 直接扫 facts，避免正文含逗号时走字符串 find
-    hits = [
-        atom.args[2]
-        for atom in machine.facts
-        if atom.pred == "of" and len(atom.args) == 3 and atom.args[0] == "content" and atom.args[1] == entity
-    ]
-    if not hits:
-        # inferred 也可能
-        hits = [
-            atom.args[2]
-            for atom in machine.inferred
-            if atom.pred == "of"
-            and len(atom.args) == 3
-            and atom.args[0] == "content"
-            and atom.args[1] == entity
-        ]
+    # QP1：显式 > 推导；facts 插入序；正文可能含逗号，不走字符串 find
+    explicit: list[str] = []
+    inferred: list[str] = []
+    for atom in machine.facts:
+        if atom.pred != "of" or len(atom.args) != 3:
+            continue
+        if atom.args[0] != "content" or atom.args[1] != entity:
+            continue
+        if atom in machine.inferred:
+            inferred.append(atom.args[2])
+        else:
+            explicit.append(atom.args[2])
+    hits = list(dict.fromkeys(explicit + inferred))
     if not hits:
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
+    got = _prefer(session, hits)
     session.push(entity)
-    return Result(ok=True, spoken=hits[0], rule="D67", focus=entity)
+    return Result(ok=True, spoken=got, rule="D67", focus=entity)
 
 
 def _is_query(names: list[str]) -> bool:
@@ -748,11 +778,19 @@ def _decode_clauses(
     if len(parts) != 2 or not all(parts):
         return Result(ok=False, err="bad clause")
     if not write:
+        # 闲聊：优先查已写入的复合关系，再回落各半句 echo
+        for atom in machine.facts:
+            if atom.pred != "of" or len(atom.args) != 3 or atom.args[0] != rel:
+                continue
+            newer, older = atom.args[1], atom.args[2]
+            if newer.startswith("e.") and older.startswith("e."):
+                spoken = f"{_speak_event(machine, older)}，{_speak_event(machine, newer)}"
+                return Result(ok=True, spoken=spoken, rule=f"{rule}.echo")
         spoken = None
         for part in parts:
             got = decode(machine, session, part, write=False)
             spoken = got.spoken or spoken
-        return Result(ok=True, spoken=spoken, rule=rule)
+        return Result(ok=True, spoken=spoken or _empty_info(), rule=rule)
     eids: list[str] = []
     spoken = None
     for part in parts:
@@ -798,11 +836,11 @@ def _decode_statement(
             session.push(subj)
             return Result(ok=True, spoken=_say_isa(subj, pred), rule="D3", focus=subj)
         # 查：先 identity，再 isa
-        ids = machine.find(f"?x of(identity, {subj}, x)")
+        ids = _qfind(machine, session, f"?x of(identity, {subj}, x)")
         if ids.values:
             got = _prefer(session, ids.values)
             return Result(ok=True, spoken=_say_isa(subj, got), rule="D3.echo", focus=subj)
-        kinds = machine.find(f"?x isa({subj}, x)")
+        kinds = _qfind(machine, session, f"?x isa({subj}, x)")
         if isinstance(kinds, FindResult) and kinds.values:
             got = _prefer(session, kinds.values)
             return Result(ok=True, spoken=_say_isa(subj, got), rule="D3.echo", focus=subj)
@@ -818,13 +856,13 @@ def _decode_statement(
             session.push(thing)
             return Result(
                 ok=True,
-                spoken=f"{_surf(thing)}在{_surf(place)}",
+                spoken=_say_located(thing, place),
                 rule="D6",
                 focus=thing,
             )
-        places = machine.find(f"?x located({thing}, x)")
+        places = _qfind(machine, session, f"?x located({thing}, x)")
         if places.values:
-            return Result(ok=True, spoken=f"{_surf(thing)}在{_surf(places.values[0])}", rule="D6.echo")
+            return Result(ok=True, spoken=_say_located(thing, places.values[0]), rule="D6.echo")
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
     if "have" in names:
@@ -835,16 +873,16 @@ def _decode_statement(
             if _placeish(left, machine) and not _personish(left, machine):
                 fx.write_located(machine, right, left)  # D4
                 session.push(right)
-                return Result(ok=True, spoken=f"{_surf(left)}有{_surf(right)}", rule="D4", focus=right)
+                return Result(ok=True, spoken=_say_has(left, right), rule="D4", focus=right)
             fx.write_has(machine, left, right)  # D5
             session.push(left)
-            return Result(ok=True, spoken=f"{_surf(left)}有{_surf(right)}", rule="D5", focus=left)
+            return Result(ok=True, spoken=_say_has(left, right), rule="D5", focus=left)
         if _placeish(left, machine):
-            hits = machine.find(f"?x located(x, {left})")
+            hits = _qfind(machine, session, f"?x located(x, {left})")
         else:
-            hits = machine.find(f"?x has({left}, x)")
+            hits = _qfind(machine, session, f"?x has({left}, x)")
         if hits.values:
-            return Result(ok=True, spoken=f"{_surf(left)}有{_surf(hits.values[0])}", rule="have.echo")
+            return Result(ok=True, spoken=_say_has(left, hits.values[0]), rule="have.echo")
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
     # D18/D19 cmp
@@ -864,11 +902,19 @@ def _decode_statement(
             if "less" in names:
                 spoken = f"{_surf(left)}不如{_surf(right)}{_surf(prop)}" if prop else f"{_surf(left)}不如{_surf(right)}"
             return Result(ok=True, spoken=spoken, rule=rule, focus=left)
-        hits = machine.find(f"?x of(comparative, {left}, x)")
+        hits = _qfind(machine, session, f"?x of(comparative, {left}, x)")
         if hits.values:
             right_got = hits.values[0]
-            props = machine.find(f"?x of(property, {left}, x)")
+            props = _qfind(machine, session, f"?x of(property, {left}, x)")
             prop_got = props.values[0] if props.values else ""
+            neg_pol = machine.yes(f"of(polarity, {left}, negative)")
+            if neg_pol:
+                spoken = (
+                    f"{_surf(left)}不如{_surf(right_got)}{_surf(prop_got)}"
+                    if prop_got
+                    else f"{_surf(left)}不如{_surf(right_got)}"
+                )
+                return Result(ok=True, spoken=spoken, rule="D19.echo")
             spoken = (
                 f"{_surf(left)}比{_surf(right_got)}{_surf(prop_got)}"
                 if prop_got
@@ -880,9 +926,9 @@ def _decode_statement(
     # D55 X的
     if "de" in names and len(ents) == 1 and not _verbs_in(senses):
         owner = ents[0]
-        hits = machine.find(f"?x has({owner}, x)")
+        hits = _qfind(machine, session, f"?x has({owner}, x)")
         if not hits.values:
-            hits = machine.find(f"?x of(possession, {owner}, x)")
+            hits = _qfind(machine, session, f"?x of(possession, {owner}, x)")
         if hits.values:
             session.push(hits.values[0])
             return Result(ok=True, spoken=_surf(hits.values[0]), rule="D55", focus=hits.values[0])
@@ -896,13 +942,13 @@ def _decode_statement(
         kind = session.focus(0)
         if not kind:
             return Result(ok=False, err="D56 needs focus")
-        hits = machine.find(f"?x isa(x, {kind})")
+        hits = _qfind(machine, session, f"?x isa(x, {kind})")
         # focus 若是个体，上溯到其类再计数
         if not hits.values:
-            classes = machine.find(f"?x isa({kind}, x)")
+            classes = _qfind(machine, session, f"?x isa({kind}, x)")
             if classes.values:
                 kind = classes.values[0]
-                hits = machine.find(f"?x isa(x, {kind})")
+                hits = _qfind(machine, session, f"?x isa(x, {kind})")
         n = len(hits.values)
         from cni.render.forms import form as form_tm
 
@@ -1057,9 +1103,15 @@ def _simple_verb(
                 obj = ""
             rule = "D20"
 
-    # D49 object ellipsis → focus / last object
+    # D49 object ellipsis → focus / last object（D54 远指空时不回退近指）
+    filled_d49 = False
     if not obj and kind in _TRANS:
-        obj = session.focus(0) or session.last_to
+        if "that" in names and not session.focus(1):
+            pass
+        else:
+            obj = session.focus(0) or session.last_to
+            if obj:
+                filled_d49 = True
 
     # D1 vs D2
     if kind in _INTRANS:
@@ -1068,7 +1120,9 @@ def _simple_verb(
         return Result(ok=False, err="D1 needs object")
 
     if not rule:
-        if prog:
+        if filled_d49:
+            rule = "D49"
+        elif prog:
             rule = "D8"
         elif modal_rule:
             rule = modal_rule
@@ -1144,6 +1198,8 @@ def _causative(
     pivot_ents = _ents(senses[i1 + 1 : i2], session, machine)
     pivot = pivot_ents[0] if pivot_ents else ""
     obj = (_ents(senses[i2 + 1 :], session, machine) or [""])[0]
+    if not obj:
+        obj = session.focus(0) or session.last_to
     if not pivot:
         return Result(ok=False, err="causative needs pivot")
     # D12 帮；D15 让/叫/使/令/请/派
@@ -1184,6 +1240,8 @@ def _serial(
     agent = (_ents(senses[:i1], session, machine) or ["other"])[0]
     o1 = (_ents(senses[i1 + 1 : i2], session, machine) or [""])[-1]
     o2 = (_ents(senses[i2 + 1 :], session, machine) or [""])[-1]
+    if not o2:
+        o2 = session.focus(0) or session.last_to
     if not write:
         hits = _events(machine, kind=v2, agent=agent, obj=o2)
         if hits:
@@ -1235,24 +1293,33 @@ def _decode_query(
         core = [s for s in senses if s.name not in {"ask", "tag_right", "tag_isa"}]
         cn = _names(core)
         ce = _ents(core, session, machine)
+
+        def _tag_spoken(ok: bool) -> str:
+            base = _yes() if ok else _no()
+            if qrule == "D33":
+                return f"{base}，对吧"
+            if qrule == "D34":
+                return f"{base}，是吗"
+            return base
+
         if "copula" in cn and len(ce) >= 2:
             ok = machine.yes(f"isa({ce[0]}, {ce[1]})") or machine.yes(
                 f"of(identity, {ce[0]}, {ce[1]})"
             )
             if neg:
                 ok = not ok
-            return Result(ok=True, spoken=_yes() if ok else _no(), rule=qrule)
+            return Result(ok=True, spoken=_tag_spoken(ok), rule=qrule)
         if "have" in cn and len(ce) >= 2:
             a, b = ce[0], ce[1]
             ok = machine.yes(f"has({a}, {b})") or machine.yes(f"located({b}, {a})")
             if neg:
                 ok = not ok
-            return Result(ok=True, spoken=_yes() if ok else _no(), rule="D23")
+            return Result(ok=True, spoken=_tag_spoken(ok), rule="D23" if qrule == "D21" else qrule)
         if "loc" in cn and len(ce) >= 2:
             ok = machine.yes(f"located({ce[0]}, {ce[1]})")
             if neg:
                 ok = not ok
-            return Result(ok=True, spoken=_yes() if ok else _no(), rule=qrule)
+            return Result(ok=True, spoken=_tag_spoken(ok), rule=qrule)
         verbs = _verbs_in(core)
         if verbs:
             kind = verbs[0][1]
@@ -1262,7 +1329,7 @@ def _decode_query(
             ok = bool(_events(machine, kind=kind, agent=agent, obj=obj))
             if neg:
                 ok = not ok
-            return Result(ok=True, spoken=_yes() if ok else _no(), rule=qrule)
+            return Result(ok=True, spoken=_tag_spoken(ok), rule=qrule)
         return Result(ok=False, err="D21 no statement")
 
     if "polar_isa" in names and len(ents) >= 2:
@@ -1279,10 +1346,10 @@ def _decode_query(
         verbs = _verbs_in(senses)
         if not verbs:
             subj = ents[0] if ents else "me"
-            hits = machine.find(f"?x of(identity, {subj}, x)")
+            hits = _qfind(machine, session, f"?x of(identity, {subj}, x)")
             if hits.values:
                 return Result(ok=True, spoken=_say_isa(subj, hits.values[0]), rule="D28")
-            kinds = machine.find(f"?x isa({subj}, x)")
+            kinds = _qfind(machine, session, f"?x isa({subj}, x)")
             if kinds.values:
                 return Result(
                     ok=True,
@@ -1297,33 +1364,43 @@ def _decode_query(
         # 对谁 V → 查 target
         if "target_mark" in names and who_i > names.index("target_mark"):
             agent = (_ents(senses[: names.index("target_mark")], session, machine) or [""])[0]
-            hits = _find_role(machine, "target", kind=kind, agent=agent)
+            hits = _find_role(machine, "target", kind=kind, agent=agent, session=session)
             if hits:
                 return Result(ok=True, spoken=_surf(hits[0]), rule="D17.q")
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
         who_first = senses[0].name == "who"
         if who_first:
             obj = after[0] if after else ""
-            hits = _find_agents(machine, kind, obj)
+            hits = _find_agents(machine, kind, obj, session=session)
             if hits:
                 return Result(ok=True, spoken=_surf(hits[0]), rule="D25")
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
         agent = (_ents(senses[:vi], session, machine) or [""])[0]
-        hits = _find_objects(machine, kind, agent)
+        hits = _find_objects(machine, kind, agent, session=session)
         if hits:
             return Result(ok=True, spoken=_surf(hits[0]), rule="D26")
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D27
-    if "what" in names and ents:
-        hits = machine.find(f"?x isa({ents[0]}, x)")
-        if hits.values:
-            return Result(
-                ok=True,
-                spoken=_say_isa(ents[0], _prefer(session, hits.values)),
-                rule="D27",
-            )
-        return Result(ok=True, spoken=_empty_q(), rule="REN2")
+    # D27 / QP3：什么→object（有动词）或 isa（无动词）
+    if "what" in names:
+        verbs = _verbs_in(senses)
+        if verbs:
+            kind = verbs[0][1]
+            vi = verbs[0][0]
+            agent = (_ents(senses[:vi], session, machine) or [""])[0]
+            hits = _find_objects(machine, kind, agent, session=session)
+            if hits:
+                return Result(ok=True, spoken=_surf(hits[0]), rule="D26")
+            return Result(ok=True, spoken=_empty_q(), rule="REN2")
+        if ents:
+            hits = _qfind(machine, session, f"?x isa({ents[0]}, x)")
+            if hits.values:
+                return Result(
+                    ok=True,
+                    spoken=_say_isa(ents[0], _prefer(session, hits.values)),
+                    rule="D27",
+                )
+            return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
     # D29 在哪里；V哪里 → destination（D20 配套）
     if "where" in names:
@@ -1332,7 +1409,7 @@ def _decode_query(
             kind = verbs[0][1]
             vi = verbs[0][0]
             agent = (_ents(senses[:vi], session, machine) or [""])[0]
-            hits = _find_role(machine, "destination", kind=kind, agent=agent)
+            hits = _find_role(machine, "destination", kind=kind, agent=agent, session=session)
             if hits:
                 return Result(
                     ok=True,
@@ -1341,11 +1418,11 @@ def _decode_query(
                 )
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
         if ents:
-            hits = machine.find(f"?x located({ents[0]}, x)")
+            hits = _qfind(machine, session, f"?x located({ents[0]}, x)")
             if hits.values:
                 return Result(
                     ok=True,
-                    spoken=f"{_surf(ents[0])}在{_surf(hits.values[0])}",
+                    spoken=_say_located(ents[0], hits.values[0]),
                     rule="D29",
                 )
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
@@ -1432,7 +1509,7 @@ def _decode_query(
             return Result(ok=False, err="D36 needs noun")
         # 聚合：count(find isa(?x, 名词))；有主语时不改变计数语义（表：按名词类）
         del subj
-        hits = machine.find(f"?x isa(x, {noun})")
+        hits = _qfind(machine, session, f"?x isa(x, {noun})")
         n = len(hits.values)
         from cni.render.forms import form as form_tm
 
@@ -1443,7 +1520,13 @@ def _decode_query(
     return Result(ok=False, err="no query rule")
 
 
-def _find_agents(machine: MachineWorld, kind: str, obj: str) -> list[str]:
+def _find_agents(
+    machine: MachineWorld,
+    kind: str,
+    obj: str,
+    *,
+    session: Session | None = None,
+) -> list[str]:
     out: list[str] = []
     for name in list(machine.domain):
         if not name.startswith("e."):
@@ -1452,12 +1535,21 @@ def _find_agents(machine: MachineWorld, kind: str, obj: str) -> list[str]:
             continue
         if obj and not machine.yes(f"of(object, {name}, {obj})"):
             continue
-        agents = machine.find(f"?x of(agent, {name}, x)")
+        if session is not None:
+            agents = _qfind(machine, session, f"?x of(agent, {name}, x)")
+        else:
+            agents = machine.find(f"?x of(agent, {name}, x)")
         out.extend(agents.values)
     return list(dict.fromkeys(out))
 
 
-def _find_objects(machine: MachineWorld, kind: str, agent: str) -> list[str]:
+def _find_objects(
+    machine: MachineWorld,
+    kind: str,
+    agent: str,
+    *,
+    session: Session | None = None,
+) -> list[str]:
     out: list[str] = []
     for name in list(machine.domain):
         if not name.startswith("e."):
@@ -1466,7 +1558,10 @@ def _find_objects(machine: MachineWorld, kind: str, agent: str) -> list[str]:
             continue
         if agent and not machine.yes(f"of(agent, {name}, {agent})"):
             continue
-        objs = machine.find(f"?x of(object, {name}, x)")
+        if session is not None:
+            objs = _qfind(machine, session, f"?x of(object, {name}, x)")
+        else:
+            objs = machine.find(f"?x of(object, {name}, x)")
         out.extend(objs.values)
     return list(dict.fromkeys(out))
 
@@ -1477,6 +1572,7 @@ def _find_role(
     *,
     kind: str = "",
     agent: str = "",
+    session: Session | None = None,
 ) -> list[str]:
     out: list[str] = []
     for name in list(machine.domain):
@@ -1486,6 +1582,9 @@ def _find_role(
             continue
         if agent and not machine.yes(f"of(agent, {name}, {agent})"):
             continue
-        hits = machine.find(f"?x of({role}, {name}, x)")
+        if session is not None:
+            hits = _qfind(machine, session, f"?x of({role}, {name}, x)")
+        else:
+            hits = machine.find(f"?x of({role}, {name}, x)")
         out.extend(hits.values)
     return list(dict.fromkeys(out))

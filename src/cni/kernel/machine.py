@@ -1,4 +1,4 @@
-"""Machine world store. WC1–WC3, QP2 (infer_depth=2)."""
+"""Machine world store. WC1–WC3, QP2 (infer_depth=1 ⇒ 子→父→祖父)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from cni.kernel.parse import (
     load_rules,
     parse_msg,
 )
-from cni.kernel.tmutil import clean
+from cni.kernel.tmutil import clean, format_arg
 from cni.paths import RUNTIME_DIR, WORLD_DIR
 
 LANG_PATH = WORLD_DIR / "lang.tm"
@@ -30,10 +30,11 @@ MEMORY_PATH = RUNTIME_DIR / "world.tm"
 class MachineWorld:
     lang: WorldLang
     domain: dict[str, str] = field(default_factory=dict)
-    facts: set[Atom] = field(default_factory=set)
+    # dict 保插入序，供 QP1 同层稳定排序（显式先写入者优先）
+    facts: dict[Atom, None] = field(default_factory=dict)
     inferred: set[Atom] = field(default_factory=set)
     rules: tuple[Rule, ...] = ()
-    infer_depth: int = 2
+    infer_depth: int = 1  # QP2：一轮 isa.trans = 子→父→祖父（两层）
     inferred_count: int = 0
 
     def apply(self, msg: Msg) -> bool | FindResult | None:
@@ -43,13 +44,13 @@ class MachineWorld:
         if msg.act == "tell":
             atom = self._atom(msg)
             if atom not in self.facts:  # WC1
-                self.facts.add(atom)
+                self.facts[atom] = None
                 self.inferred.discard(atom)
                 self._infer_forward()
             return None
         if msg.act == "drop":  # WC3
             atom = self._atom(msg)
-            self.facts.discard(atom)
+            self.facts.pop(atom, None)
             self.inferred.discard(atom)
             return None
         if msg.act == "yesno":
@@ -68,11 +69,11 @@ class MachineWorld:
         got = self.apply(parse_msg(f"? {text}"))
         return bool(got)
 
-    def find(self, text: str) -> FindResult:
+    def find(self, text: str, *, pins: list[str] | tuple[str, ...] | None = None) -> FindResult:
         msg = parse_msg(text if text.startswith("?") or text.startswith("find") else f"?x {text}")
         if msg.act != "find":
             raise ValueError("find needs a find message")
-        return self._find(msg)
+        return self._find(msg, pins=pins)
 
     def ensure(self, name: str, sort: str = "e") -> None:
         if name not in self.domain:
@@ -103,7 +104,7 @@ class MachineWorld:
     def _goals(self, msg: Msg) -> list[Goal]:
         return msg.goals or [Goal(msg.pred, list(msg.args))]
 
-    def _find(self, msg: Msg) -> FindResult:
+    def _find(self, msg: Msg, *, pins: list[str] | tuple[str, ...] | None = None) -> FindResult:
         goals = self._goals(msg)
         if not goals:
             raise ValueError("find needs a pred")
@@ -120,18 +121,28 @@ class MachineWorld:
             env = {msg.var: cand}
             if all(self._holds(goal, env) for goal in goals):
                 hits.append(cand)
-        # QP1: explicit > inferred; within tier, non-events before event log
-        explicit = [h for h in hits if not self._value_only_inferred(msg, goals, h)]
-        inferred = [h for h in hits if h not in explicit]
+        # QP1：显式 > isa.trans 推导 > 会话钉 > 事件日志；同层保持发现顺序
+        pin_set = set(pins or ())
+        explicit = {h for h in hits if not self._value_only_inferred(msg, goals, h)}
+        uniq = list(dict.fromkeys(hits))
 
-        def _tier(vals: list[str]) -> list[str]:
-            non_ev = [v for v in vals if not v.startswith("e.")]
-            ev = [v for v in vals if v.startswith("e.")]
-            return [*non_ev, *ev]
+        def _qp1_tier(v: str) -> int:
+            is_expl = v in explicit
+            is_event = v.startswith("e.")
+            is_pin = v in pin_set
+            if is_expl and not is_event:
+                return 0
+            if not is_expl and not is_event:
+                return 1
+            # 会话钉：钉住的事件高于一般事件日志
+            if is_pin:
+                return 2
+            if is_event:
+                return 3
+            return 1
 
-        ordered = list(dict.fromkeys([*_tier(explicit), *_tier(inferred)]))
+        ordered = sorted(uniq, key=lambda v: (_qp1_tier(v), uniq.index(v)))
         return FindResult(var=msg.var, values=tuple(ordered))
-
     def _value_only_inferred(self, msg: Msg, goals: list[Goal], value: str) -> bool:
         env = {msg.var: value}
         for goal in goals:
@@ -185,31 +196,39 @@ class MachineWorld:
         for _ in range(self.infer_depth):  # QP2
             added = False
             for rule in self.rules:
-                for env in self._rule_envs(rule.lhs):
+                # QP2：isa.trans 左件只用显式事实，避免推导再推导越过祖父层
+                explicit_only = rule.name == "isa.trans"
+                for env in self._rule_envs(rule.lhs, explicit_only=explicit_only):
                     atom = self._rule_atom(rule.rhs, env)
                     if atom is None or atom in self.facts:
                         continue
-                    self.facts.add(atom)
+                    self.facts[atom] = None
                     self.inferred.add(atom)
                     self.inferred_count += 1
                     added = True
             if not added:
                 break
 
-    def _rule_envs(self, lhs: tuple[Goal, ...]) -> list[dict[str, str]]:
+    def _rule_envs(
+        self, lhs: tuple[Goal, ...], *, explicit_only: bool = False
+    ) -> list[dict[str, str]]:
         envs: list[dict[str, str]] = [{}]
         for goal in lhs:
             next_envs: list[dict[str, str]] = []
             for env in envs:
-                next_envs.extend(self._match_goal(goal, env))
+                next_envs.extend(self._match_goal(goal, env, explicit_only=explicit_only))
             envs = next_envs
             if not envs:
                 break
         return envs
 
-    def _match_goal(self, goal: Goal, env: dict[str, str]) -> list[dict[str, str]]:
+    def _match_goal(
+        self, goal: Goal, env: dict[str, str], *, explicit_only: bool = False
+    ) -> list[dict[str, str]]:
         out: list[dict[str, str]] = []
         for fact in self.facts:
+            if explicit_only and fact in self.inferred:
+                continue
             if fact.pred != goal.pred:
                 continue
             trial = dict(env)
@@ -270,7 +289,7 @@ def boot(
     path: Path | None = None,
     memory_path: Path | None = None,
     rules_path: Path | None = None,
-    infer_depth: int = 2,
+    infer_depth: int = 1,
 ) -> MachineWorld:
     machine = MachineWorld(
         load_lang(path or LANG_PATH),
@@ -299,9 +318,13 @@ def save_world(machine: MachineWorld, path: Path | None = None) -> None:
             lines.append(f"! {name} : {sort}")
     for fact in sorted(machine.facts, key=lambda item: (item.pred, item.args)):
         if fact.pred == "isa":
-            told = f"+ isa({fact.args[0]}, {fact.args[1]})"
+            told = f"+ isa({format_arg(fact.args[0])}, {format_arg(fact.args[1])})"
         elif fact.pred == "of":
-            told = f"+ of({', '.join(fact.args)})"
+            told = f"+ of({', '.join(format_arg(a) for a in fact.args)})"
+        elif fact.pred == "has":
+            told = f"+ has({format_arg(fact.args[0])}, {format_arg(fact.args[1])})"
+        elif fact.pred == "located":
+            told = f"+ located({format_arg(fact.args[0])}, {format_arg(fact.args[1])})"
         else:
             continue
         if told in stock:

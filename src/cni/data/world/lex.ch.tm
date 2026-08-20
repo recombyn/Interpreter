@@ -109,7 +109,7 @@ lex ch {
   in 没 pastneg
   in 别 forbid
   in 可以 can
-  in 能 can
+  in 能 able
   in 应该 must
   in 必须 force
   in 可能 may

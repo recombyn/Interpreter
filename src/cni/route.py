@@ -128,16 +128,9 @@ def turn(
     *,
     today: date | None = None,
 ) -> Result:
-    """RO2 read-only path (I intercepts may still note session)."""
+    """RO2 read-only path：绝不写库。"""
     prep = _prep(machine, text, today=today)
     if prep.intercept is not None:
-        # chat: greet event still allowed as session act; no open facts
-        if prep.greet:
-            eid = fx.new_event(machine)
-            machine.tell(f"of(kind, {eid}, greet)")
-            machine.tell(f"of(agent, {eid}, other)")
-            machine.tell(f"of(object, {eid}, me)")
-            session.note(event=eid)
         return Result(ok=True, spoken=prep.intercept, rule=prep.intercept_rule)
     got = decode(machine, session, prep.text, write=False)
     return got

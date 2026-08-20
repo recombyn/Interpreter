@@ -1,2 +1,2 @@
-# Forward rules. QP2: MachineWorld.infer_depth defaults to 2.
+# Forward rules. QP2: one forward pass ⇒ 子→父→祖父 only (infer_depth=1).
 rule isa.trans: isa(?a, ?b) ∧ isa(?b, ?c) => isa(?a, ?c)
