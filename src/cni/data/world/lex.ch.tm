@@ -26,6 +26,35 @@ lex ch {
   in 和 with_mark
   in 的 de
 
+  in 高 adj_tall
+  in 矮 adj_short
+  in 大 adj_big
+  in 小 adj_small
+  in 好 adj_good
+  in 坏 adj_bad
+  in 强 adj_strong
+  in 弱 adj_weak
+  in 快 adj_fast
+  in 慢 adj_slow
+  in 长 adj_long
+  in 短 adj_brief
+  in 新 adj_new
+  in 旧 adj_old
+  out adj_tall 高
+  out adj_short 矮
+  out adj_big 大
+  out adj_small 小
+  out adj_good 好
+  out adj_bad 坏
+  out adj_strong 强
+  out adj_weak 弱
+  out adj_fast 快
+  out adj_slow 慢
+  out adj_long 长
+  out adj_brief 短
+  out adj_new 新
+  out adj_old 旧
+
   in 吗 ask
   in 呢 mood_ne
   in 吧 mood_ba
@@ -161,9 +190,11 @@ lex ch {
   in 聊 talk
   in 走 go
   in 买 buy
+  in 饿 hungry
 
   out invent 发明
   out buy 买
+  out hungry 饿
   out drink 喝
   out eat 吃
   out see 看

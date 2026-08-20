@@ -103,8 +103,23 @@ def tokenize(text: str, lex: Lex) -> list[Sense]:
                 hit = key
                 break
         if hit:
-            senses.append(Sense(lex.to_sense[hit], surface=hit))
-            i += len(hit)
+            sense = lex.to_sense[hit]
+            # 单字形容词后接汉字：优先并入开名（「小明」≠「小」+「明」）
+            end = i + len(hit)
+            if (
+                len(hit) == 1
+                and sense.startswith("adj_")
+                and end < n
+                and "\u4e00" <= text[end] <= "\u9fff"
+                and text[end] not in _SKIP
+                and not any(text.startswith(k, end) for k in keys)
+            ):
+                hit = ""
+            else:
+                senses.append(Sense(sense, surface=hit))
+                i = end
+                continue
+        if hit:
             continue
         # open chunk: consecutive non-lex chars；汉字与 ASCII/数字边界切开
         j = i + 1

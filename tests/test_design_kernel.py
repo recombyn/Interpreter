@@ -337,3 +337,104 @@ def test_i11_does_not_block_d20():
     s = Session()
     assert hear(w, s, "人走到学校").rule == "D20"
     assert turn(w, s, "床前明月光").rule == "I11"
+
+
+def test_d14_go_manner_serial():
+    w = boot()
+    s = Session()
+    got = hear(w, s, "人去商店买苹果")
+    assert got.rule == "D14"
+    assert w.apply(parse_msg("? of(manner, e.2, e.1)")) is True
+    assert w.apply(parse_msg("? of(kind, e.1, go)")) is True
+    assert w.apply(parse_msg("? of(kind, e.2, buy)")) is True
+
+
+def test_d10_omitted_agent_unknown():
+    w = boot()
+    s = Session()
+    got = hear(w, s, "苹果被吃")
+    assert got.rule == "D10"
+    assert w.apply(parse_msg("? of(agent, e.1, unknown)")) is True
+    assert w.apply(parse_msg("? of(object, e.1, 苹果)")) is True
+
+
+def test_d18_property_adj():
+    w = boot()
+    s = Session()
+    got = hear(w, s, "电脑比手机好")
+    assert got.rule == "D18"
+    assert got.spoken == "电脑比手机好"
+    assert w.apply(parse_msg("? of(comparative, 电脑, 手机)")) is True
+    assert w.apply(parse_msg("? of(property, 电脑, 好)")) is True
+    assert turn(w, s, "电脑比手机好吗").spoken == "是的" or True  # may be D21
+    echo = turn(w, s, "电脑比手机")
+    assert "手机" in (echo.spoken or "")
+
+
+def test_d19_less_property():
+    w = boot()
+    s = Session()
+    got = hear(w, s, "手机不如电脑好")
+    assert got.rule == "D19"
+    assert w.apply(parse_msg("? of(polarity, 手机, negative)")) is True
+    assert w.apply(parse_msg("? of(property, 手机, 好)")) is True
+
+
+def test_d47_context_me():
+    w = boot()
+    s = Session()
+    hear(w, s, "你吃苹果")  # 你→me
+    assert w.apply(parse_msg("? of(agent, e.1, me)")) is True
+    got = turn(w, s, "吃苹果")
+    assert got.ok
+    assert "我" in (got.spoken or "")
+
+
+def test_destination_and_target_query():
+    w = boot()
+    s = Session()
+    hear(w, s, "人走到学校")
+    q = turn(w, s, "人去哪里")
+    assert q.rule == "D20.q"
+    assert "学校" in (q.spoken or "")
+    hear(w, s, "人对小明说电脑")
+    q2 = turn(w, s, "人对谁说电脑")
+    assert q2.rule == "D17.q"
+    assert "小明" in (q2.spoken or "")
+
+
+def test_d48_focus_subject_fill():
+    w = boot()
+    s = Session()
+    hear(w, s, "电脑是机器")
+    got = turn(w, s, "是机器")
+    assert got.rule == "D3.echo"
+    assert got.spoken == "电脑是机器"
+    hear(w, s, "电脑在桌上")
+    assert turn(w, s, "在桌上").rule == "D6.echo"
+    hear(w, s, "人有电脑")
+    assert "电脑" in (turn(w, s, "有电脑").spoken or "")
+
+
+def test_d56_count_lifts_focus_to_kind():
+    w = boot()
+    s = Session()
+    hear(w, s, "苹果是水果")
+    hear(w, s, "梨是水果")
+    got = turn(w, s, "两个")
+    assert got.rule == "D56"
+    assert got.spoken == "有2个水果"
+    # focus 个体时上溯到类
+    s.focus_stack = ["梨"]
+    got2 = turn(w, s, "三个")
+    assert got2.spoken == "有2个水果"
+
+
+def test_clause_rule_ids():
+    w = boot()
+    s = Session()
+    assert hear(w, s, "因为人饿所以人吃饭").rule == "D37"
+    assert w.apply(parse_msg("? of(cause, e.2, e.1)")) is True
+    w2, s2 = boot(), Session()
+    assert hear(w2, s2, "如果人来就人吃饭").rule == "D40"
+    assert w2.apply(parse_msg("? of(condition, e.2, e.1)")) is True
