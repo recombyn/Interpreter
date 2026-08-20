@@ -26,28 +26,11 @@ CNI 是一个**纯符号推理的中文语言理解引擎**。
 
 **问题**
 
-<table width="100%">
-<thead>
-<tr>
-<th width="32%" align="left">方案</th>
-<th width="68%" align="left">问题</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>正则 / 关键词匹配</td>
-<td>覆盖窄，维护成本随输入变体爆炸增长</td>
-</tr>
-<tr>
-<td>传统 NLP（分词+词性+依存）</td>
-<td>工具链重，泛化脆，改不了规则</td>
-</tr>
-<tr>
-<td>大语言模型（LLM）</td>
-<td>幻觉、黑盒、成本高、无法精准审计</td>
-</tr>
-</tbody>
-</table>
+| 方案 | 问题 |
+| --- | --- |
+| 正则 / 关键词匹配 | 覆盖窄，维护成本随输入变体爆炸增长 |
+| 传统 NLP（分词+词性+依存） | 工具链重，泛化脆，改不了规则 |
+| 大语言模型（LLM） | 幻觉、黑盒、成本高、无法精准审计 |
 
 **目标**
 
@@ -60,89 +43,17 @@ CNI 的设计目标是：**可控、可解释、可扩展、零幻觉**。
 
 ## 与其他方案对比
 
-<table width="100%">
-<colgroup>
-<col width="28%" />
-<col width="18%" />
-<col width="20%" />
-<col width="16%" />
-<col width="18%" />
-</colgroup>
-<thead>
-<tr>
-<th align="left">能力</th>
-<th align="center">正则</th>
-<th align="center">传统 NLP</th>
-<th align="center">大模型（LLM）</th>
-<th align="center"><strong>CNI</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>理解自然语言结构</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">△（依赖语料训练）</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓（符号规则）</td>
-</tr>
-<tr>
-<td>结果可审计</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">✗（黑盒）</td>
-<td align="center">✓（每步可追踪）</td>
-</tr>
-<tr>
-<td>零幻觉</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-<tr>
-<td>支持多种句式（把/被/疑问/复句…）</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓（65条 D 规则）</td>
-</tr>
-<tr>
-<td>纠错（错别字/同音字）</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓（E 系列）</td>
-</tr>
-<tr>
-<td>方言/口语输入</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓（F/G 系列）</td>
-</tr>
-<tr>
-<td>无需互联网 / 无 API 费用</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-<tr>
-<td>用户可扩展词典</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">✓（<code>user_dict.tm</code>）</td>
-</tr>
-<tr>
-<td>知识边界清晰</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-</tbody>
-</table>
+| 能力 | &emsp;&emsp;正则&emsp;&emsp; | &emsp;传统 NLP&emsp; | &emsp;大模型（LLM）&emsp; | &emsp;**CNI**&emsp; |
+| --- | :---: | :---: | :---: | :---: |
+| 理解自然语言结构 | &emsp;✗&emsp; | △（依赖语料训练） | &emsp;✓&emsp; | ✓（符号规则） |
+| 结果可审计 | &emsp;✓&emsp; | &emsp;△&emsp; | ✗（黑盒） | ✓（每步可追踪） |
+| 零幻觉 | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| 支持多种句式（把/被/疑问/复句…） | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（65条 D 规则） |
+| 纠错（错别字/同音字） | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（E 系列） |
+| 方言/口语输入 | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓（F/G 系列） |
+| 无需互联网 / 无 API 费用 | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| 用户可扩展词典 | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓（`user_dict.tm`） |
+| 知识边界清晰 | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
 
 ## 设计原理
 
@@ -177,30 +88,10 @@ of(content, 静夜思, 床前明月光) # 内容
 
 **规则分层**
 
-<table width="100%">
-<thead>
-<tr>
-<th width="18%" align="left">层</th>
-<th width="48%" align="left">内容</th>
-<th width="12%" align="center">条数</th>
-<th width="22%" align="left">谁维护</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>表1（内核）</strong></td>
-<td>句法/纠错/语序/时间/社交等核心算法</td>
-<td align="center">110条</td>
-<td>引擎内核</td>
-</tr>
-<tr>
-<td><strong>表2（用户）</strong></td>
-<td>缩写、方言词、中英混写、表情映射等</td>
-<td align="center">54条</td>
-<td><code>user_dict.tm</code></td>
-</tr>
-</tbody>
-</table>
+| 层 | 内容 | 条数 | 谁维护 |
+| --- | --- | :---: | --- |
+| **表1（内核）** | 句法/纠错/语序/时间/社交等核心算法 | 110条 | 引擎内核 |
+| **表2（用户）** | 缩写、方言词、中英混写、表情映射等 | 54条 | `user_dict.tm` |
 
 表1 是算法；表2 是词典映射。
 

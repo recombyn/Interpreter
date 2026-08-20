@@ -26,28 +26,11 @@ You ask: "电脑是什么"
 
 **Problem**
 
-<table width="100%">
-<thead>
-<tr>
-<th width="32%" align="left">Approach</th>
-<th width="68%" align="left">Limitation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Regex / keyword matching</td>
-<td>Narrow coverage; maintenance explodes with input variants</td>
-</tr>
-<tr>
-<td>Traditional NLP (tokenize + POS + dependency)</td>
-<td>Heavy toolchain; brittle generalization; rules hard to change</td>
-</tr>
-<tr>
-<td>Large language models (LLMs)</td>
-<td>Hallucination, opacity, high cost, hard to audit precisely</td>
-</tr>
-</tbody>
-</table>
+| Approach | Limitation |
+| --- | --- |
+| Regex / keyword matching | Narrow coverage; maintenance explodes with input variants |
+| Traditional NLP (tokenize + POS + dependency) | Heavy toolchain; brittle generalization; rules hard to change |
+| Large language models (LLMs) | Hallucination, opacity, high cost, hard to audit precisely |
 
 **Goals**
 
@@ -60,89 +43,17 @@ CNI aims to be **controllable, explainable, extensible, and hallucination-free**
 
 ## Comparison
 
-<table width="100%">
-<colgroup>
-<col width="28%" />
-<col width="18%" />
-<col width="20%" />
-<col width="16%" />
-<col width="18%" />
-</colgroup>
-<thead>
-<tr>
-<th align="left">Capability</th>
-<th align="center">Regex</th>
-<th align="center">Traditional NLP</th>
-<th align="center">LLM</th>
-<th align="center"><strong>CNI</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Understand NL structure</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">△ (corpus-trained)</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓ (symbolic rules)</td>
-</tr>
-<tr>
-<td>Auditable results</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">✗ (black box)</td>
-<td align="center">✓ (step-by-step)</td>
-</tr>
-<tr>
-<td>Zero hallucination</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-<tr>
-<td>Many constructions (ba/bei, questions, complexes…)</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓ (65 D-rules)</td>
-</tr>
-<tr>
-<td>Typo / homophone correction</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓ (E-series)</td>
-</tr>
-<tr>
-<td>Dialect / colloquial input</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">✓ (F/G-series)</td>
-</tr>
-<tr>
-<td>No internet / no API cost</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-<tr>
-<td>User-extensible lexicon</td>
-<td align="center">&nbsp;&nbsp;✗&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">✓ (<code>user_dict.tm</code>)</td>
-</tr>
-<tr>
-<td>Clear knowledge boundary</td>
-<td align="center">&nbsp;&nbsp;✓&nbsp;&nbsp;</td>
-<td align="center">&nbsp;△&nbsp;</td>
-<td align="center">&nbsp;✗&nbsp;</td>
-<td align="center">&nbsp;✓&nbsp;</td>
-</tr>
-</tbody>
-</table>
+| Capability | &emsp;&emsp;Regex&emsp;&emsp; | &emsp;Traditional NLP&emsp; | &emsp;&emsp;LLM&emsp;&emsp; | &emsp;**CNI**&emsp; |
+| --- | :---: | :---: | :---: | :---: |
+| Understand NL structure | &emsp;✗&emsp; | △ (corpus-trained) | &emsp;✓&emsp; | ✓ (symbolic rules) |
+| Auditable results | &emsp;✓&emsp; | &emsp;△&emsp; | ✗ (black box) | ✓ (step-by-step) |
+| Zero hallucination | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| Many constructions (ba/bei, questions, complexes…) | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (65 D-rules) |
+| Typo / homophone correction | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (E-series) |
+| Dialect / colloquial input | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓ (F/G-series) |
+| No internet / no API cost | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| User-extensible lexicon | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓ (`user_dict.tm`) |
+| Clear knowledge boundary | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
 
 ## Design
 
@@ -177,30 +88,10 @@ of(content, 静夜思, 床前明月光) # content
 
 **Rule layers**
 
-<table width="100%">
-<thead>
-<tr>
-<th width="18%" align="left">Layer</th>
-<th width="48%" align="left">Content</th>
-<th width="12%" align="center">Count</th>
-<th width="22%" align="left">Owner</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Table 1 (kernel)</strong></td>
-<td>Syntax / fix / order / time / social core algorithms</td>
-<td align="center">110</td>
-<td>Engine kernel</td>
-</tr>
-<tr>
-<td><strong>Table 2 (user)</strong></td>
-<td>Abbreviations, dialect, CN–EN mix, emoji maps, etc.</td>
-<td align="center">54</td>
-<td><code>user_dict.tm</code></td>
-</tr>
-</tbody>
-</table>
+| Layer | Content | Count | Owner |
+| --- | --- | :---: | --- |
+| **Table 1 (kernel)** | Syntax / fix / order / time / social core algorithms | 110 | Engine kernel |
+| **Table 2 (user)** | Abbreviations, dialect, CN–EN mix, emoji maps, etc. | 54 | `user_dict.tm` |
 
 Table 1 is algorithm; Table 2 is lexicon maps.
 
