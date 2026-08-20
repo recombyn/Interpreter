@@ -1,83 +1,146 @@
-# Closed names. Open names later use intro.
-# Relations: isa(NAME, rel). Add a business relation here; do not add a pred.
+# Closed names. Open names use intro at hear time.
 
 ! rel : e
-! verb : e
 ! person : e
+! place : e
 
 ! me : e
 ! other : e
+! unknown : e
 ! here : e
 ! now : e
-! this : e
-! that : e
 
-# Default content. No learning yet: greet, and me is 机器语言TM.
 ! 机器语言TM : e
 + isa(me, 机器语言TM)
 + isa(机器语言TM, person)
 
-! do : e
-! to : e
-! at : e
-! from : e
-! goal : e
-! with : e
-! when : e
-! has : e
+# Event role / link relations (设计内核)
+! agent : e
+! object : e
+! kind : e
+! progress : e
+! identity : e
+! recipient : e
+! destination : e
+! target : e
 ! cause : e
-! pol : e
-! than : e
+! purpose : e
+! manner : e
+! contrast : e
+! condition : e
+! during : e
+! before : e
+! progression : e
+! comparative : e
+! property : e
+! polarity : e
+! modal : e
+! mood : e
+! possession : e
+! emphasis : e
+! farewell : e
+! 开心 : e
+! 伤心 : e
+! 思考 : e
+! 接受 : e
 
-+ isa(do, rel)
-+ isa(to, rel)
-+ isa(at, rel)
-+ isa(from, rel)
-+ isa(goal, rel)
-+ isa(with, rel)
-+ isa(when, rel)
-+ isa(has, rel)
++ isa(agent, rel)
++ isa(object, rel)
++ isa(kind, rel)
++ isa(progress, rel)
++ isa(identity, rel)
++ isa(recipient, rel)
++ isa(destination, rel)
++ isa(target, rel)
 + isa(cause, rel)
-+ isa(pol, rel)
-+ isa(than, rel)
++ isa(purpose, rel)
++ isa(manner, rel)
++ isa(contrast, rel)
++ isa(condition, rel)
++ isa(during, rel)
++ isa(before, rel)
++ isa(progression, rel)
++ isa(comparative, rel)
++ isa(property, rel)
++ isa(polarity, rel)
++ isa(modal, rel)
++ isa(mood, rel)
++ isa(possession, rel)
++ isa(emphasis, rel)
 
 ! greet : e
-! ask : e
-! say : e
-! want : e
-! order : e
-
 ! yes : e
 ! no : e
-! who : e
-! where : e
-! what : e
-! how : e
-! whenq : e
+! negative : e
+! ongoing : e
+! 进行中 : e
 
-! prog : e
-! pfv : e
-! dur : e
-! exp : e
+! ability : e
+! duty : e
+! force : e
+! possibility : e
+! 能力 : e
+! 义务 : e
+! 强制 : e
+! 可能 : e
 
+! buy : e
 ! invent : e
 ! drink : e
-! live : e
-! make : e
-! see : e
-! talk : e
-! think : e
-! come : e
-! go : e
-! hit : e
 ! eat : e
-! use : e
-! call : e
+! see : e
+! go : e
+! come : e
 ! give : e
 ! put : e
+! help : e
+! let : e
+! invite : e
+! call : e
+! say : e
+! make : e
+! use : e
+! hit : e
+! think : e
+! wait : e
 ! openv : e
 ! close : e
-! wait : e
+! live : e
+! talk : e
+! checkv : e
+! holdv : e
+! updatev : e
+! downloadv : e
+! sharev : e
+! linkv : e
+! copyv : e
+! deletev : e
+! sendv : e
+! phone : e
+! callout : e
+
+! when : e
+! degree : e
+! freq : e
+! scope : e
+! forbid : e
+! content : e
++ isa(when, rel)
++ isa(degree, rel)
++ isa(freq, rel)
++ isa(scope, rel)
++ isa(forbid, rel)
++ isa(content, rel)
+
+! 很 : e
+! 非常 : e
+! 太 : e
+! 总是 : e
+! 经常 : e
+! 偶尔 : e
+! 都 : e
+! 只 : e
+! 也 : e
 
 ! n1 : e
 ! n2 : e
@@ -89,31 +152,4 @@
 ! n8 : e
 ! n9 : e
 ! n10 : e
-
-! de : e
 ! clf : e
-! nay : e
-! last : e
-! focus : e
-! polar : e
-! copula : e
-
-+ isa(invent, verb)
-+ isa(drink, verb)
-+ isa(live, verb)
-+ isa(make, verb)
-+ isa(see, verb)
-+ isa(talk, verb)
-+ isa(think, verb)
-+ isa(come, verb)
-+ isa(go, verb)
-+ isa(hit, verb)
-+ isa(eat, verb)
-+ isa(use, verb)
-+ isa(call, verb)
-+ isa(give, verb)
-+ isa(put, verb)
-+ isa(openv, verb)
-+ isa(close, verb)
-+ isa(wait, verb)
-+ isa(want, verb)

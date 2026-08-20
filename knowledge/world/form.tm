@@ -1,15 +1,25 @@
-# Closed constructions. Trigger → pred → last mark.
-# Two-place of/isa only. Verbs, clf, from/to are events, not use-lines.
-# Anything not listed here is not compiled; the turn is world-miss.
+# out templates: const → surface. Missing → REN1 bare logic.
+out greet 你好
+out yes 是的
+out no 不是
+out unknown_q 我不知道
+out unknown_info 我不了解这个信息
+out teach_err 教学格式错误
+out rhetorical 我不知道
+out count 有{0}个
 
-form mwl {
-
-  use copula isa copula
-  use de has de
-  use cmp than than
-  use with with with
-  use nohave has has
-  use have has has
-  use loc at at
-
+form isa {
+  out say.isa {0}是{1}
+}
+form located {
+  out say.located {0}在{1}
+}
+form has {
+  out say.has {0}有{1}
+}
+form identity {
+  out say.identity {0}是{1}
+}
+form event {
+  out say.event {0}{1}{2}
 }

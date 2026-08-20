@@ -1,6 +1,2 @@
-# Rule set for forward inference (isa/of only).
-# Syntax:
-#   rule <name>: ATOM ∧ ATOM => ATOM
-#   Variables start with ? and are shared by exact name.
-
+# Forward rules. QP2: MachineWorld.infer_depth defaults to 2.
 rule isa.trans: isa(?a, ?b) ∧ isa(?b, ?c) => isa(?a, ?c)

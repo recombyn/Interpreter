@@ -14,3 +14,8 @@ build/
 *.jsonl
 runtime/*.tm
 !runtime/.gitkeep
+
+# 设计草稿不进仓库（聊天贴表 / 临时笔记）
+knowledge/**/*.txt
+knowledge/**/design.*
+*系列.txt

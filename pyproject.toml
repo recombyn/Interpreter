@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cni"
 version = "0.1.0"
-description = "Symbolic machine world: human text in, isa/of facts, text out"
+description = "CNI: rule-based Chinese interpreter (isa/of facts, no LLM)"
 requires-python = ">=3.12"
 dependencies = []
 

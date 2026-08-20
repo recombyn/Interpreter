@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from cni.interpreter import Interpreter
+from cni.app import Interpreter
 
 
 def build_interpreter(args: argparse.Namespace) -> Interpreter:
@@ -20,11 +20,9 @@ def _run_gui(interp: Interpreter) -> int:
     root = tk.Tk()
     root.title("cni")
     root.geometry("640x420")
-
     log = tk.Text(root, wrap="word")
     log.pack(fill="both", expand=True, padx=8, pady=8)
     log.configure(state="disabled")
-
     row = tk.Frame(root)
     row.pack(fill="x", padx=8, pady=(0, 8))
     entry = tk.Entry(row)
@@ -56,23 +54,17 @@ def _run_gui(interp: Interpreter) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="UTF-8 in, machine world, UTF-8 out.")
-    parser.add_argument(
-        "--rules-path",
-        help="optional rule file path (defaults to knowledge/world/rules.tm)",
-    )
-    parser.add_argument(
-        "--infer-depth",
-        type=int,
-        default=2,
-        help="forward inference depth cap (0 disables inference)",
-    )
+    parser = argparse.ArgumentParser(description="CNI: rule-based interpreter (no LLM).")
+    parser.add_argument("--rules-path", help="optional rules.tm path")
+    parser.add_argument("--infer-depth", type=int, default=2, help="QP2 depth (default 2)")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    reply_p = sub.add_parser("reply", help="one-shot reply")
+    reply_p = sub.add_parser("reply", help="chat turn (read-only unless 教…)")
     reply_p.add_argument("text")
     reply_p.add_argument("--trace", action="store_true")
+    teach_p = sub.add_parser("teach", help="write path (hear)")
+    teach_p.add_argument("text")
     sub.add_parser("repl", help="interactive loop")
-    sub.add_parser("gui", help="window with a text box")
+    sub.add_parser("gui", help="window")
     args = parser.parse_args(argv)
     interp = build_interpreter(args)
 
@@ -85,11 +77,14 @@ def main(argv: list[str] | None = None) -> int:
             print(result.reply)
         return 0
 
+    if args.cmd == "teach":
+        print(interp.teach(args.text))
+        return 0
+
     if args.cmd == "gui":
         return _run_gui(interp)
 
-    print("cni repl. :q to quit")
-    show_trace = False
+    print("cni repl. :q quit | 教… to teach | 重置 to clear session")
     while True:
         try:
             line = input("> ").strip()
@@ -98,20 +93,6 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if not line:
             continue
-        if line in {":q", ":quit", ":exit"}:
+        if line in {":q", ":quit"}:
             return 0
-        if line.startswith(":trace"):
-            show_trace = "off" not in line
-            print("trace", "on" if show_trace else "off")
-            continue
-        result = interp.interpret(line)
-        if show_trace:
-            print(f"notes: {result.notes}")
-            print(f"reply: {result.reply}")
-        else:
-            print(result.reply)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        print(interp.reply(line))
