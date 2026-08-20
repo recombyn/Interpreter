@@ -1,4 +1,4 @@
-"""Machine world store. WC1–WC3, QP2 (infer_depth=1 ⇒ 子→父→祖父)."""
+"""Machine world store. WC1–WC3, QP2 (infer_depth=1 ⇒ child→parent→grandparent)."""
 
 from __future__ import annotations
 
@@ -30,12 +30,16 @@ MEMORY_PATH = RUNTIME_DIR / "world.tm"
 class MachineWorld:
     lang: WorldLang
     domain: dict[str, str] = field(default_factory=dict)
-    # dict 保插入序，供 QP1 同层稳定排序（显式先写入者优先）
+    # dict keeps insertion order for QP1 same-tier stable sort (earlier explicit writes first)
     facts: dict[Atom, None] = field(default_factory=dict)
     inferred: set[Atom] = field(default_factory=set)
     rules: tuple[Rule, ...] = ()
-    infer_depth: int = 1  # QP2：一轮 isa.trans = 子→父→祖父（两层）
+    infer_depth: int = 1  # QP2: one isa.trans round = child→parent→grandparent (two hops)
     inferred_count: int = 0
+    # D66/D67 side index: entity → content texts (insertion order). O(1) lookup vs scan facts.
+    _content_index: dict[str, list[str]] = field(default_factory=dict)
+    # Optional disk-backed store (sharded); D67 merges memory + disk.
+    content_store: object | None = None
 
     def apply(self, msg: Msg) -> bool | FindResult | None:
         if msg.act == "intro":
@@ -46,12 +50,14 @@ class MachineWorld:
             if atom not in self.facts:  # WC1
                 self.facts[atom] = None
                 self.inferred.discard(atom)
+                self._index_content_tell(atom)
                 self._infer_forward()
             return None
         if msg.act == "drop":  # WC3
             atom = self._atom(msg)
             self.facts.pop(atom, None)
             self.inferred.discard(atom)
+            self._index_content_drop(atom)
             return None
         if msg.act == "yesno":
             return self._atom(msg) in self.facts
@@ -78,6 +84,61 @@ class MachineWorld:
     def ensure(self, name: str, sort: str = "e") -> None:
         if name not in self.domain:
             self._intro(name, sort)
+
+    def contents_of(self, entity: str) -> list[str]:
+        """D67: contents for entity. QP1 explicit > inferred; memory then disk store."""
+        explicit: list[str] = []
+        inferred: list[str] = []
+        texts = self._content_index.get(entity) or []
+        for body in texts:
+            atom = Atom("of", ("content", entity, body))
+            if atom not in self.facts:
+                continue
+            if atom in self.inferred:
+                inferred.append(body)
+            else:
+                explicit.append(body)
+        mem = list(dict.fromkeys(explicit + inferred))
+        if self.content_store is not None:
+            try:
+                disk = list(self.content_store.get(entity) or [])  # type: ignore[attr-defined]
+            except Exception:
+                disk = []
+            for body in disk:
+                if body not in mem:
+                    mem.append(body)
+        return mem
+
+    def _index_content_tell(self, atom: Atom) -> None:
+        if atom.pred != "of" or len(atom.args) != 3 or atom.args[0] != "content":
+            return
+        entity, body = atom.args[1], atom.args[2]
+        bucket = self._content_index.setdefault(entity, [])
+        if body not in bucket:
+            bucket.append(body)
+        if self.content_store is not None:
+            try:
+                self.content_store.put(entity, body)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+    def _index_content_drop(self, atom: Atom) -> None:
+        if atom.pred != "of" or len(atom.args) != 3 or atom.args[0] != "content":
+            return
+        entity, body = atom.args[1], atom.args[2]
+        bucket = self._content_index.get(entity)
+        if bucket:
+            try:
+                bucket.remove(body)
+            except ValueError:
+                pass
+            if not bucket:
+                self._content_index.pop(entity, None)
+        if self.content_store is not None:
+            try:
+                self.content_store.drop(entity, body)  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
     def _intro(self, const: str, sort: str) -> None:
         if sort not in self._sorts():
@@ -121,7 +182,7 @@ class MachineWorld:
             env = {msg.var: cand}
             if all(self._holds(goal, env) for goal in goals):
                 hits.append(cand)
-        # QP1：显式 > isa.trans 推导 > 会话钉 > 事件日志；同层保持发现顺序
+        # QP1: explicit > isa.trans inferred > session pins > event log; same tier keeps discovery order
         pin_set = set(pins or ())
         explicit = {h for h in hits if not self._value_only_inferred(msg, goals, h)}
         uniq = list(dict.fromkeys(hits))
@@ -134,7 +195,7 @@ class MachineWorld:
                 return 0
             if not is_expl and not is_event:
                 return 1
-            # 会话钉：钉住的事件高于一般事件日志
+            # Session pins: pinned events outrank general event log
             if is_pin:
                 return 2
             if is_event:
@@ -196,7 +257,7 @@ class MachineWorld:
         for _ in range(self.infer_depth):  # QP2
             added = False
             for rule in self.rules:
-                # QP2：isa.trans 左件只用显式事实，避免推导再推导越过祖父层
+                # QP2: isa.trans left side uses only explicit facts to avoid chaining past grandparent
                 explicit_only = rule.name == "isa.trans"
                 for env in self._rule_envs(rule.lhs, explicit_only=explicit_only):
                     atom = self._rule_atom(rule.rhs, env)
@@ -205,6 +266,7 @@ class MachineWorld:
                     self.facts[atom] = None
                     self.inferred.add(atom)
                     self.inferred_count += 1
+                    self._index_content_tell(atom)
                     added = True
             if not added:
                 break

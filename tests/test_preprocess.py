@@ -32,16 +32,58 @@ def test_user_dict_f_and_h():
     assert "检查" in apply_user_dict("check一下")
     assert "更新" in apply_user_dict("update")
     assert "打电话" in apply_user_dict("call")
-    assert load_user_dict()  # 示例词典非空
+    assert load_user_dict()  # sample dict non-empty
 
 
 def test_f41_50_order_only_hardcoded():
     assert "有没有" in apply_f_order("有冇电脑")
     assert "正在吃饭" in apply_f_order("紧食饭")
-    # F1–40 不在硬编码里：无词典时 yyds 原样
+    # F1–40 not hard-coded: without dict, yyds stays as-is
     from cni.preprocess import apply_f_order as fo
 
     assert fo("yyds") == "yyds"
+
+
+def test_f41_50_guide_examples():
+    # F41 guide: dialect "eat first" → "first eat"; includes look-verb dialect
+    assert apply_f_order("食先") == "先食"
+    assert apply_f_order("睇先") == "先睇"
+    assert apply_f_order("吃饭先") == "先吃饭"
+    # Do not false-split a two-character verb before "first"
+    assert apply_f_order("读写先") == "读写先"
+    # F48
+    assert apply_f_order("去学校先") == "先去学校"
+    # F42
+    assert apply_f_order("有吃饭") == "曾吃饭过" or apply_f_order("有吃") == "曾吃过"
+    assert apply_f_order("有吃") == "曾吃过"
+    assert apply_f_order("有食") == "曾食过"
+    # F43 sentence-final punctuation
+    assert apply_f_order("给本书我。") == "给我本书。"
+    assert apply_f_order("给苹果我") == "给我苹果"
+    # F44
+    assert apply_f_order("苹果大过橙子") == "苹果比橙子大"
+    assert apply_f_order("他高过我很多") == "他比我高很多"
+    # F45 / F46
+    assert "了" in apply_f_order("食咗")
+    assert apply_f_order("系咪机器") == "是不是机器"
+    # F47
+    assert apply_f_order("紧睇") == "正在看"
+    assert apply_f_order("紧食") == "正在吃"
+    # F49 source slot
+    assert apply_f_order("小明来的") == "小明是从哪里来"
+    assert apply_f_order("小明来的？") == "小明是从哪里来？"
+    # F50
+    assert apply_f_order("讲这件事我知") == "告诉我这件事"
+    assert apply_f_order("讲我知") == "告诉我"
+
+
+def test_g_relative_days_longest_and_week():
+    today = date(2026, 8, 20)  # Thursday
+    assert apply_g("大后天", today=today) == "2026-08-23"
+    assert apply_g("大前天", today=today) == "2026-08-17"
+    assert "大" not in apply_g("大后天", today=today)
+    assert apply_g("上周三", today=today) == "2026-08-19"
+    assert apply_g("这周一", today=today) == "2026-08-17"
 
 
 def test_i_hardcoded_intercepts():
@@ -49,9 +91,34 @@ def test_i_hardcoded_intercepts():
     s = Session()
     assert turn(w, s, "谢谢").spoken == "不客气"
     assert turn(w, s, "thx").spoken == "不客气"  # user_dict thx→谢谢 → I1
-    assert turn(w, s, "hello").spoken == "你好！"
-    assert turn(w, s, "bye").spoken == "再见！"
+    assert turn(w, s, "hello").spoken == "你好！"  # user_dict hello→你好 → I2
+    assert turn(w, s, "bye").spoken == "再见！"  # user_dict bye→再见 → I3
     assert turn(w, s, "哦").spoken == "我知道了"
+
+
+def test_no_system_english_lex():
+    """System does not load English lex; without dict, pure English does not take greet decode."""
+    from cni.decode.lex import pick_lex
+    from pathlib import Path
+    from cni.paths import WORLD_DIR
+
+    assert pick_lex("hello").name == "ch"
+    assert not (WORLD_DIR / "lex.en.tm").is_file()
+    w = boot()
+    s = Session()
+    # Temp: without hello mapping, pure-English open name must not tag greet
+    from cni.decode import decode
+    from cni.preprocess import apply_user_dict
+
+    # Decode English directly (bypass user_dict) → non-greet system path
+    got = decode(w, s, "hello", write=False)
+    assert got.rule != "greet"
+
+
+def test_user_dict_does_not_double_expand_prefix():
+    """map 试用→试用期 must not turn 试用期 into 试用期期."""
+    assert apply_user_dict("试用期六个月合法吗", mapping=[("试用", "试用期")]) == "试用期六个月合法吗"
+    assert apply_user_dict("试用六个月", mapping=[("试用", "试用期")]) == "试用期六个月"
 
 
 def test_i11_poetry_before_d():
@@ -61,23 +128,25 @@ def test_i11_poetry_before_d():
     got = turn(w, s, "床前明月光")
     assert got.rule == "I11"
     assert got.spoken == msg
-    # 五七言两句
+    # Two 5/7-char verse lines
     assert turn(w, s, "床前明月光，疑是地上霜").rule == "I11"
-    # 之乎者也
+    # Classical particles
     assert turn(w, s, "学而时习之").rule == "I11"
-    # 有疑问词 → 不触发，走查询
+    # Interrogative present → do not trigger; take query path
     assert turn(w, s, "床前明月光是什么").rule != "I11"
     assert turn(w, s, "电脑是什么").rule != "I11"
-    # D66 教内容不受 I11 挡
+    # D66 teach-content not blocked by I11
     assert hear(w, s, "静夜思的内容是床前明月光").rule == "D66"
+    # 5-char SVO with modern verb 打 must not be treated as verse
+    assert hear(w, s, "小明打小红").rule != "I11"
 
 
 def test_i4_emoji_via_user_dict_not_auto_mood():
-    """😂 经词典变成「开心」字面，不再内核挂 mood。"""
+    """😂 becomes literal via dict; kernel no longer attaches mood."""
     w = boot()
     s = Session()
     hear(w, s, "人吃饭😂")
-    # 不应再自动 of(mood, e.1, 开心)
+    # Must not auto-attach a mood fact for emoji
     assert w.apply(parse_msg("? of(mood, e.1, 开心)")) is not True
 
 

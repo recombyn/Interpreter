@@ -70,14 +70,10 @@ def lex_ch() -> Lex:
     return load_lex(WORLD_DIR / "lex.ch.tm")
 
 
-def lex_en() -> Lex:
-    return load_lex(WORLD_DIR / "lex.en.tm")
-
-
 def pick_lex(text: str) -> Lex:
-    if any("\u4e00" <= ch <= "\u9fff" for ch in text):
-        return lex_ch()
-    return lex_en()
+    """System loads Chinese lex only. English must be mapped via user_dict (table-2 H) first."""
+    del text
+    return lex_ch()
 
 
 def tokenize(text: str, lex: Lex) -> list[Sense]:
@@ -90,7 +86,7 @@ def tokenize(text: str, lex: Lex) -> list[Sense]:
         if text[i] in _SKIP:
             i += 1
             continue
-        # G 注入的绝对日期单独成块，避免与前后汉字粘连
+        # Absolute dates injected by G stay as their own chunk; avoid gluing to adjacent CJK
         m = iso.match(text, i)
         if m:
             chunk = m.group(0)
@@ -104,7 +100,7 @@ def tokenize(text: str, lex: Lex) -> list[Sense]:
                 break
         if hit:
             sense = lex.to_sense[hit]
-            # 单字形容词后接汉字：优先并入开名（「小明」≠「小」+「明」）
+            # Single-char adj before CJK: prefer merging into open name (avoid splitting person names)
             end = i + len(hit)
             if (
                 len(hit) == 1
@@ -121,7 +117,7 @@ def tokenize(text: str, lex: Lex) -> list[Sense]:
                 continue
         if hit:
             continue
-        # open chunk: consecutive non-lex chars；汉字与 ASCII/数字边界切开
+        # open chunk: consecutive non-lex chars; split at CJK ↔ ASCII/digit boundaries
         j = i + 1
         while j < n and text[j] not in _SKIP:
             if iso.match(text, j):
@@ -138,7 +134,7 @@ def tokenize(text: str, lex: Lex) -> list[Sense]:
 
 
 def _script_break(a: str, b: str) -> bool:
-    """汉字 ↔ 拉丁/数字 之间切开。"""
+    """Split between CJK ↔ Latin/digits."""
     def kind(ch: str) -> str:
         if "\u4e00" <= ch <= "\u9fff":
             return "cjk"

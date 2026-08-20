@@ -169,7 +169,7 @@ def test_mem_reset_clears_pins():
 
 
 def test_reply_teach_prefix():
-    interp = Interpreter(remember=False)
+    interp = Interpreter(remember=False, load_user_docs=False)
     assert "机器" in interp.reply("教电脑是机器")
     assert interp.reply("电脑是什么") == "电脑是机器"
 
@@ -182,16 +182,89 @@ def test_ren2_empty_find():
     assert got.spoken == "我不知道"
 
 
-def test_d66_d67_content_verbatim():
+def test_user_dict_blocks_structure_words(tmp_path):
+    from cni.preprocess import apply_user_dict, load_user_dict
+
+    load_user_dict.cache_clear()
+    # Malicious mapping must not rewrite the structural copula surface
+    assert apply_user_dict("电脑是机器", mapping=[("是", "等于")]) == "电脑是机器"
+    p = tmp_path / "bad.tm"
+    p.write_text("map 是 等于\nmap yyds 永远的神\n", encoding="utf-8")
+    load_user_dict.cache_clear()
+    pairs = load_user_dict(p)
+    assert ("是", "等于") not in pairs
+    assert ("yyds", "永远的神") in pairs
+    load_user_dict.cache_clear()
+
+
+def test_d66_clips_trailing_question():
     w = boot()
     s = Session()
-    # chat 不写
+    got = hear(w, s, "静夜思的内容是床前明月光，它是什么朝代的？")
+    assert got.rule == "D66"
+    assert "朝代" not in (got.spoken or "")
+    assert "床前明月光" in (got.spoken or "")
+    q = turn(w, s, "静夜思的内容是什么")
+    assert q.spoken == "床前明月光"
+
+
+def test_dual_focus_event_deixis():
+    w = boot()
+    s = Session()
+    hear(w, s, "人吃苹果")
+    assert s.last_event.startswith("e.")
+    assert s.last_event in s.event_stack
+    assert "苹果" in s.focus_stack or "人" in s.focus_stack
+    # "this matter" deixis → event pin
+    assert s.resolve_deixis(eventish=True) == s.last_event
+
+
+def test_route_buckets_query_before_basic():
+    from cni.decode.route_table import classify_buckets, load_route_groups
+
+    load_route_groups.cache_clear()
+    assert load_route_groups()
+    b = classify_buckets("电脑是什么", ["what", "copula"])
+    assert b[0] == "query"
+    assert "basic" in b
+
+
+def test_route_special_ba():
+    from cni.decode.route_table import classify_buckets
+
+    b = classify_buckets("人把苹果吃", ["ba", "eat"])
+    assert "special" in b
+    assert b.index("special") < b.index("basic")
+
+
+def test_content_side_index_d67():
+    """D67 uses entity→content index; drop keeps index in sync."""
+    from cni.kernel.parse import parse_msg
+
+    w = boot()
+    s = Session()
+    hear(w, s, "甲的内容是一")
+    hear(w, s, "甲的内容是二")
+    hear(w, s, "乙的内容是三")
+    assert w.contents_of("甲") == ["一", "二"]
+    assert w.contents_of("乙") == ["三"]
+    assert turn(w, s, "甲的内容是什么").spoken in {"一", "二"}
+    w.apply(parse_msg("- of(content, 甲, 一)"))
+    assert w.contents_of("甲") == ["二"]
+    assert turn(w, s, "甲的内容是什么").spoken == "二"
+    from cni.tools.validate_rules import check_pattern_conflicts, load_patterns
+
+    load_patterns.cache_clear()
+    assert check_pattern_conflicts() == []
+    w = boot()
+    s = Session()
+    # chat does not write
     assert turn(w, s, "静夜思的内容是床前明月光").rule != "D66"
     assert "静夜思" not in w.domain
     got = hear(w, s, "静夜思的内容是床前明月光")
     assert got.rule == "D66"
     assert w.apply(parse_msg("? of(content, 静夜思, 床前明月光)")) is True
-    # 正文含逗号也原样
+    # Body with commas kept verbatim
     hear(w, s, "短歌行的内容是对酒当歌,人生几何")
     assert any(
         a.pred == "of" and a.args == ("content", "短歌行", "对酒当歌,人生几何") for a in w.facts
@@ -251,9 +324,9 @@ def test_d57_chat_neg_query():
     hear(w, s, "人吃苹果")
     got = turn(w, s, "人不吃苹果")
     assert got.rule == "D57"
-    assert got.spoken == "不是"  # 正事实存在 → 否定命题为假
+    assert got.spoken == "不是"  # positive fact exists → negated proposition is false
     empty = turn(w, s, "人发明电脑")
-    # 先确认无此事件
+    # First confirm no such event
     assert empty.rule == "REN2" or empty.spoken
     got2 = turn(w, s, "人不发明电脑")
     assert got2.rule == "D57"
@@ -282,7 +355,7 @@ def test_d58_undated_event_counts():
     hear(w, s, "人吃苹果")
     got = turn(w, s, "人没吃苹果")
     assert got.rule == "D58"
-    assert got.spoken == "不是"  # 已有事件 → 过去否定为假
+    assert got.spoken == "不是"  # existing event → past negation is false
 
 
 def test_d49_object_ellipsis_tag():
@@ -301,7 +374,7 @@ def test_qp1_pin_below_explicit():
     hear(w, s, "电脑是设备")
     s.focus_stack = ["设备"]
     got = turn(w, s, "电脑是什么")
-    # 同层显式按写入序；会话钉不重排显式层
+    # Same-tier explicit by write order; session pin does not reorder explicit tier
     assert got.spoken == "电脑是机器"
 
 
@@ -309,9 +382,9 @@ def test_d54_far_deixis_no_fallback():
     w = boot()
     s = Session()
     hear(w, s, "人吃苹果")
-    s.focus_stack = ["苹果"]  # 仅近指，无远指
+    s.focus_stack = ["苹果"]  # near only, no far
     got = hear(w, s, "人吃那个")
-    # D54 空远指时不回退近指；不得标 D49 用 focus[0] 补宾语
+    # D54: empty far must not fall back to near; must not mark D49 filling object from focus[0]
     assert got.rule != "D49"
 
 
@@ -324,8 +397,8 @@ def test_qp2_isa_depth_lock():
     w.tell("isa(甲, 乙)")
     w.tell("isa(乙, 丙)")
     w.tell("isa(丙, 丁)")
-    assert w.yes("isa(甲, 丙)")  # 祖父层
-    assert not w.yes("isa(甲, 丁)")  # 不推曾祖父
+    assert w.yes("isa(甲, 丙)")  # grandparent tier
+    assert not w.yes("isa(甲, 丁)")  # do not infer great-grandparent
 
 
 def test_qp3_what_as_object():
@@ -365,7 +438,7 @@ def test_ro3_empty_spoken():
 
     w = boot()
     s = Session()
-    # 无法解码的教学输入 → 教学格式错误
+    # Undecodable teach input → teach format error
     got = hear_ro(w, s, "……")
     assert got.rule == "RO3"
     assert got.spoken == "教学格式错误"
@@ -416,7 +489,7 @@ def test_d20_motion_destination():
     assert got.spoken == "人去到学校"
     assert w.apply(parse_msg("? of(destination, e.1, 学校)")) is True
     assert w.apply(parse_msg("? of(kind, e.1, go)")) is True
-    # 结果补语「吃到」不当 D20
+    # Resultative complement must not be D20
     w2, s2 = boot(), Session()
     got2 = hear(w2, s2, "人吃到苹果")
     assert got2.rule == "D1"
@@ -503,7 +576,7 @@ def test_d67_multi_content_prefers_explicit():
     hear(w, s, "短歌行的内容是对酒当歌,人生几何")
     got = turn(w, s, "短歌行的内容是什么")
     assert got.rule == "D67"
-    assert got.spoken == "第一稿"  # 显式插入序首条
+    assert got.spoken == "第一稿"  # first explicit by insertion order
 
 
 def test_content_save_roundtrip(tmp_path):
@@ -574,7 +647,7 @@ def test_d56_count_lifts_focus_to_kind():
     got = turn(w, s, "两个")
     assert got.rule == "D56"
     assert got.spoken == "有2个水果"
-    # focus 个体时上溯到类
+    # When focus is an individual, walk up to kind
     s.focus_stack = ["梨"]
     got2 = turn(w, s, "三个")
     assert got2.spoken == "有2个水果"

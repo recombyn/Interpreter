@@ -7,11 +7,18 @@ import re
 
 from cni.decode import effects as fx
 from cni.decode.lex import Sense, form_of, pick_lex, tokenize
+from cni.decode.route_table import classify_buckets
 from cni.kernel import FindResult, MachineWorld
 from cni.session import Session
+from cni.system_tm import load_system
+from cni.text.d66 import D66_CONTENT_RE, clip_d66_content
 
-_D66 = re.compile(r"^(.+?)\s*的内容是\s*(.+)$")
 _D67 = re.compile(r"^(.+?)\s*的内容\s*是什么\s*[？?]?\s*$")
+_D67_CHAR = re.compile(
+    r"^(.+?)(?:的)?第(?P<n>\d+|[一二三四五六七八九十百零〇两]+)"
+    r"个字(?:是什么|是啥|是哪|为)?\s*[？?]?\s*$"
+)
+_D67_LEN = re.compile(r"^(.+?)(?:的)?(?:有多少字|多少字|字数(?:是多少)?)\s*[？?]?\s*$")
 
 _VERBS = {
     "invent",
@@ -117,13 +124,15 @@ class Result:
     rule: str = ""
     focus: str = ""
     err: str = ""
+    confidence: float = 1.0
+    warn: str = ""
 
 
 def _names(senses: list[Sense]) -> list[str]:
     return [s.name for s in senses]
 
 
-def _entity(sense: Sense, session: Session) -> str | None:
+def _entity(sense: Sense, session: Session, *, eventish: bool = False) -> str | None:
     # D50–D54
     if sense.name == "self":
         return "me"
@@ -132,16 +141,16 @@ def _entity(sense: Sense, session: Session) -> str | None:
     if sense.name in _ADJ:
         return _ADJ[sense.name]
     if sense.name == "ana":
-        # D52：focus_stack[0]，若无则 intro 新个体
-        top = session.focus(0)
+        # D52 / MEM5: patient → focus → coref chain tip; else intro
+        top = session.resolve_ana()
         if top:
             return top
-        return ""  # 由调用方 intro
+        return ""  # caller will intro
     if sense.name == "this":
-        return session.focus(0) or ""
+        return session.resolve_deixis(far=False, eventish=eventish)
     if sense.name == "that":
-        # D54：仅远指 focus[1]，不回退到 [0]
-        return session.focus(1) or ""
+        # D54: far deixis; event classifiers → event stack
+        return session.resolve_deixis(far=True, eventish=eventish)
     if sense.open or sense.name not in {
         *_VERBS,
         "copula",
@@ -240,15 +249,22 @@ def _entity(sense: Sense, session: Session) -> str | None:
 
 def _ents(senses: list[Sense], session: Session, machine: MachineWorld | None = None) -> list[str]:
     out: list[str] = []
-    for sense in senses:
+    for i, sense in enumerate(senses):
         if sense.name == "ana" and not session.focus(0):
-            # D52：无 focus 则 intro
+            # D52: no focus → intro
             name = sense.surface or "他"
             if machine is not None:
                 fx.ensure(machine, name)
             out.append(name)
             continue
-        name = _entity(sense, session)
+        eventish = False
+        if sense.name in {"this", "that"} and i + 1 < len(senses):
+            nxt = senses[i + 1]
+            tip = nxt.surface or nxt.name
+            deixis = load_system().event_deixis
+            if tip in deixis or nxt.name in deixis:
+                eventish = True
+        name = _entity(sense, session, eventish=eventish)
         if name:
             out.append(name)
     return out
@@ -258,9 +274,9 @@ def _verbs_in(senses: list[Sense]) -> list[tuple[int, str]]:
     base = [(i, s.name) for i, s in enumerate(senses) if s.name in _VERBS]
     give_marks = [i for i, s in enumerate(senses) if s.name == "give_mark"]
     if give_marks and not base:
-        # D11 给 as main verb
+        # D11 give_mark as main verb
         return [(give_marks[0], "give")]
-    # D16 给 as preposition: ignore give_mark as verb
+    # D16 give as preposition: ignore give_mark as verb
     return base
 
 
@@ -272,7 +288,7 @@ def _mood(senses: list[Sense]) -> str:
 
 
 def _extract_mods(senses: list[Sense], ents: list[str]) -> tuple[str, str, str, str]:
-    """程度/频率/范围/时间（含 G 注入的绝对日期）。"""
+    """Degree/freq/scope/time (incl. absolute dates injected by G)."""
     degree = freq = scope = when = ""
     for s in senses:
         if s.name in _DEG:
@@ -293,12 +309,12 @@ def _strip_dates(ents: list[str]) -> list[str]:
 
 
 def _is_kind_name(machine: MachineWorld, name: str) -> bool:
-    """曾作 isa(_, name) 的类名。"""
+    """Kind name previously used as isa(_, name)."""
     return any(a.pred == "isa" and a.args[1] == name for a in machine.facts)
 
 
 def _is_individual_name(machine: MachineWorld, name: str) -> bool:
-    """表语为个体：已在域内、不作类、且为人称或已有实例身份。"""
+    """Predicate is an individual: in domain, not a kind, and person or has instance isa."""
     if name not in machine.domain:
         return False
     if _is_kind_name(machine, name):
@@ -309,7 +325,7 @@ def _is_individual_name(machine: MachineWorld, name: str) -> bool:
 
 
 def _prefer(session: Session, values: tuple[str, ...] | list[str]) -> str:
-    """QP1：取 find 已排序的首项（显式>推导>会话钉>事件）。"""
+    """QP1: take first of find sorted hits (explicit>inferred>session pin>event)."""
     del session
     if not values:
         return ""
@@ -321,7 +337,7 @@ def _qfind(machine: MachineWorld, session: Session, query: str):
 
 
 def _fill_ellipsis(senses: list[Sense], session: Session, *, write: bool) -> list[Sense]:
-    # D47：句首动词无主语 → 补 other；上下文指向 me 则补 me；D7 写库 → me
+    # D47: sentence-initial verb without subject → supply other; if context is me supply me; D7 write → me
     if not senses:
         return senses
     names = _names(senses)
@@ -340,7 +356,7 @@ def _fill_ellipsis(senses: list[Sense], session: Session, *, write: bool) -> lis
 
 
 def _modal(senses: list[Sense]) -> tuple[str, str]:
-    """返回 (modal常量, 规则号)。D60 可以 / D61 能 / D62 应该 / D63 必须 / D64 可能。"""
+    """Return (modal constant, rule id). D60 can / D61 able / D62 must / D63 force / D64 may."""
     for s in senses:
         if s.name == "can":
             return "能力", "D60"
@@ -398,12 +414,12 @@ def _surf(name: str) -> str:
 
 
 def _ren1(pred: str, *args: str) -> str:
-    """REN1: fact exists but form.tm 无匹配模板。"""
+    """REN1: fact exists but form.tm has no matching template."""
     return f"[原始逻辑] {pred}({','.join(args)})"
 
 
 def _apply_form(key: str, *args: str, pred: str | None = None) -> str:
-    """用 form.tm / lex 模板渲染；缺模板 → REN1。"""
+    """Render with form.tm / lex template; missing template → REN1."""
     from cni.render.forms import form as form_tm
 
     tpl = form_tm(key) or form_of(key)
@@ -416,7 +432,7 @@ def _apply_form(key: str, *args: str, pred: str | None = None) -> str:
 
 
 def _say_isa(subj: str, kind: str) -> str:
-    # identity 与 isa 同形；优先 say.isa
+    # identity shares form with isa; prefer say.isa
     return _apply_form("say.isa", subj, kind, pred="isa")
 
 
@@ -431,27 +447,28 @@ def _say_has(owner: str, thing: str) -> str:
 def _yes() -> str:
     from cni.render.forms import form as form_tm
 
-    return form_of("yes") or form_tm("yes") or "是的"
+    # User form.tm / reply_mode overrides win over lex
+    return form_tm("yes") or form_of("yes") or "是的"
 
 
 def _no() -> str:
     from cni.render.forms import form as form_tm
 
-    return form_of("no") or form_tm("no") or "不是"
+    return form_tm("no") or form_of("no") or "不是"
 
 
 def _empty_q() -> str:
     """REN2 question: the rule ran and find returned empty."""
     from cni.render.forms import form as form_tm
 
-    return form_of("unknown_q") or form_tm("unknown_q") or "我不知道"
+    return form_tm("unknown_q") or form_of("unknown_q") or "我不知道"
 
 
 def _empty_info() -> str:
     """REN2 statement: the rule ran and find returned empty."""
     from cni.render.forms import form as form_tm
 
-    return form_of("unknown_info") or form_tm("unknown_info") or "我不了解这个信息"
+    return form_tm("unknown_info") or form_of("unknown_info") or "我不了解这个信息"
 
 
 def _role(machine: MachineWorld, src: str, rel: str) -> str:
@@ -469,7 +486,7 @@ def _speak_event(machine: MachineWorld, eid: str) -> str:
 
     kind_surf = form_of(kind) or form_tm(kind)
     if not kind_surf:
-        # REN1：有事件、无 kind 表面模板
+        # REN1: have event, no kind surface template
         parts = ["kind", eid, kind]
         if agent:
             parts = [eid, kind, agent] + ([obj] if obj else [])
@@ -510,7 +527,7 @@ def _events(
         if obj and not machine.yes(f"of(object, {name}, {obj})"):
             continue
         if before_now:
-            # D58：有 when 且 < today 计入；无 when 的事件也计入（否则「没」误判）
+            # D58: count if when < today; also count events without when (else past-neg misfires)
             whens = machine.find(f"?x of(when, {name}, x)")
             if whens.values and not any(t < today for t in whens.values):
                 continue
@@ -526,14 +543,14 @@ def _decode_neg_query(
     *,
     neg: str,
 ) -> Result:
-    """D57/D58 闲聊：对去否定后的命题做存在查询并取反；D58 仅计 at_time < now。"""
+    """D57/D58 chat: existence-query the de-negated proposition and flip; D58 only counts at_time < now."""
     names = _names(core)
     ents = _ents(core, session, machine)
     past = neg == "past"
     rule = "D58" if past else "D57"
 
     def _flip(ok: bool) -> Result:
-        # 否定命题：正事实存在 → 答「不是」；不存在 → 「是的」
+        # Negated proposition: positive fact exists → answer no; absent → yes
         return Result(ok=True, spoken=_yes() if (not ok) else _no(), rule=rule)
 
     if "copula" in names and len(ents) >= 2:
@@ -574,13 +591,19 @@ def decode(
     if session.reset_if(raw):
         return Result(ok=True, spoken="好的", rule="MEM3")
 
-    # D66 / D67：正文不入 tokenizer（在 greet / 句法之前）
+    # D66 / D67: content-clause early exit (basic group; must run before tokenize)
     d66 = _try_d66(machine, session, raw, write=write)
     if d66 is not None:
         return d66
     d67 = _try_d67(machine, session, raw)
     if d67 is not None:
         return d67
+    d67c = _try_d67_char(machine, session, raw)
+    if d67c is not None:
+        return d67c
+    d69 = _try_d69(machine, session, raw, write=write)
+    if d69 is not None:
+        return d69
 
     lex = pick_lex(raw)
     senses = tokenize(raw, lex)
@@ -589,7 +612,7 @@ def decode(
 
     names = _names(senses)
 
-    # greet
+    # greet (I2 usually in preprocess; fallback here)
     if "greet" in names:
         if write:
             eid = fx.new_event(machine)
@@ -598,54 +621,166 @@ def decode(
             machine.tell(f"of(object, {eid}, me)")
         return Result(ok=True, spoken=form_of("greet", lex) or "你好", rule="greet")
 
-    # D35 rhetorical
-    if "rhetorical" in names:
-        return Result(ok=True, spoken=form_of("rhetorical") or _empty_q(), rule="D35")
-
-    # Clause split D37–D46
-    clause = _clause_split(raw)
-    if clause is not None:
-        return _decode_clauses(machine, session, clause, write=write)
-
     senses = _fill_ellipsis(senses, session, write=write)
     names = _names(senses)
+    buckets = classify_buckets(raw, names)
 
-    if _is_query(names):
-        return _decode_query(machine, session, senses, write=write)
+    # Write path: first hit wins (legacy). Chat path may scan for AMB1.
+    from cni.user_config import ambig_mode
 
-    neg = _neg(senses)
-    # D59 别 → forbid(V,O), no event write
-    if neg == "forbid":
-        verbs = _verbs_in(senses)
-        obj = ""
-        kind = verbs[0][1] if verbs else ""
-        if verbs:
-            obj = (_ents(senses[verbs[0][0] + 1 :], session) or [""])[0]
-        if write:
-            if kind:
-                fx.write_forbid(machine, kind, obj)
-            session.push(obj)
+    mode = ambig_mode() if not write else "first"
+    probe = mode in {"clarify", "warn"} and (
+        len(raw) >= 10 or "，" in raw or "," in raw or len(buckets) > 2
+    )
+
+    if not probe:
+        for bucket in buckets:
+            try:
+                got = _try_bucket(
+                    machine, session, raw, senses, names, write=write, bucket=bucket
+                )
+            except ValueError:
+                got = None
+            if got is not None:
+                return got
+        return Result(ok=False, err="no pattern")
+
+    # Multi-bucket probe (read-only): collect distinct rules
+    hits: list[Result] = []
+    seen_rules: set[str] = set()
+    for bucket in buckets:
+        try:
+            got = _try_bucket(
+                machine, session, raw, senses, names, write=False, bucket=bucket
+            )
+        except ValueError:
+            got = None
+        if got is None or not got.ok:
+            continue
+        key = (got.rule or "").split(".")[0]
+        if key in seen_rules:
+            continue
+        seen_rules.add(key)
+        hits.append(got)
+
+    if not hits:
+        return Result(ok=False, err="no pattern")
+    if len(hits) == 1:
+        return hits[0]
+
+    rules = [h.rule or "?" for h in hits[:4]]
+    warn = f"ambiguous:{'/'.join(rules)}"
+    if mode == "clarify":
+        from cni.render.forms import form as form_tm
+
+        spoken = form_tm("ambig") or (
+            f"这句话可能有多种理解（{' / '.join(rules)}）。请说得更具体一些。"
+        )
+        return Result(
+            ok=True,
+            spoken=spoken,
+            rule="AMB1",
+            confidence=0.4,
+            warn=warn,
+            focus=hits[0].focus,
+        )
+    # warn: return first answer but lower confidence
+    first = hits[0]
+    return Result(
+        ok=first.ok,
+        spoken=first.spoken,
+        rule=first.rule,
+        focus=first.focus,
+        err=first.err,
+        confidence=0.55,
+        warn=warn,
+    )
+
+
+def _try_bucket(
+    machine: MachineWorld,
+    session: Session,
+    raw: str,
+    senses: list[Sense],
+    names: list[str],
+    *,
+    write: bool,
+    bucket: str,
+) -> Result | None:
+    """Opt 3: try by route.tm group; on miss return None to fall through to next group."""
+    if bucket == "query":
+        if "rhetorical" in names:
+            return Result(ok=True, spoken=form_of("rhetorical") or _empty_q(), rule="D35")
+        if _is_query(names):
+            return _decode_query(machine, session, senses, write=write)
+        return None
+
+    if bucket == "compound":
+        clause = _clause_split(raw)
+        if clause is not None:
+            return _decode_clauses(machine, session, clause, write=write)
+        return None
+
+    if bucket == "special":
+        special_marks = {
+            "ba",
+            "bei",
+            "give_mark",
+            "let",
+            "help",
+            "call",
+            "invite",
+            "cmp",
+            "less",
+            "target_mark",
+            "dest_mark",
+        }
+        if not (special_marks & set(names)):
+            return None
+        got = _decode_statement(machine, session, senses, write=write, mode="special")
+        if got is None or (not got.ok and (got.err or "") in {"no pattern", "no query rule"}):
+            return None
+        return got
+
+    if bucket == "deixis":
+        # Ellipsis/deixis already in _fill_ellipsis; defer when this group has no dedicated handler
+        return None
+
+    if bucket == "basic":
+        neg = _neg(senses)
+        if neg == "forbid":
+            verbs = _verbs_in(senses)
+            obj = ""
+            kind = verbs[0][1] if verbs else ""
+            if verbs:
+                obj = (_ents(senses[verbs[0][0] + 1 :], session) or [""])[0]
+            if write:
+                if kind:
+                    fx.write_forbid(machine, kind, obj)
+                session.push(obj)
+                spoken = f"别{_surf(kind)}{_surf(obj)}" if kind else "好的"
+                return Result(ok=True, spoken=spoken, rule="D59", focus=obj)
             spoken = f"别{_surf(kind)}{_surf(obj)}" if kind else "好的"
             return Result(ok=True, spoken=spoken, rule="D59", focus=obj)
-        # chat: acknowledge forbid without new write if already stored
-        spoken = f"别{_surf(kind)}{_surf(obj)}" if kind else "好的"
-        return Result(ok=True, spoken=spoken, rule="D59", focus=obj)
-    # D57/D58: 不入库；闲聊路径对肯定命题做 yesno（加 not）；D58 再滤 at_time < now
-    if neg in {"no", "past"}:
-        core = [s for s in senses if s.name not in {"no", "pastneg"}]
-        if write:
-            got = _decode_statement(machine, session, core, write=False)
-            particle = "没" if neg == "past" else "不"
-            if got.spoken and got.spoken not in {_empty_info(), _empty_q()}:
-                return Result(
-                    ok=True,
-                    spoken=particle + got.spoken,
-                    rule="D57" if neg == "no" else "D58",
-                )
-            return Result(ok=True, spoken="好的", rule="D57" if neg == "no" else "D58")
-        return _decode_neg_query(machine, session, core, neg=neg)
+        if neg in {"no", "past"}:
+            # Fact vs query negation: teach/write never stores a negated event triple;
+            # chat uses D57/D58 query flip (see _decode_neg_query). Spoken "不/没"+echo
+            # on write=True is acknowledgment only (RO teach of bare 不… is particle+echo).
+            core = [s for s in senses if s.name not in {"no", "pastneg"}]
+            if write:
+                got = _decode_statement(machine, session, core, write=False, mode="basic")
+                particle = "没" if neg == "past" else "不"
+                if got and got.spoken and got.spoken not in {_empty_info(), _empty_q()}:
+                    return Result(
+                        ok=True,
+                        spoken=particle + got.spoken,
+                        rule="D57" if neg == "no" else "D58",
+                    )
+                return Result(ok=True, spoken="好的", rule="D57" if neg == "no" else "D58")
+            return _decode_neg_query(machine, session, core, neg=neg)
+        return _decode_statement(machine, session, senses, write=write, mode="basic")
 
-    return _decode_statement(machine, session, senses, write=write)
+    return None
 
 
 def _strip_wrap_quotes(text: str) -> str:
@@ -663,22 +798,22 @@ def _try_d66(
     *,
     write: bool,
 ) -> Result | None:
-    """D66: {实体}的内容是{任意文本} — 仅写库；正文原样，不解析。"""
-    m = _D66.match(text)
+    """D66: entity content-clause — write only; keep body verbatim, clip following questions."""
+    m = D66_CONTENT_RE.match(text)
     if m is None:
         return None
-    # 排除 D67：「…的内容是什么」
+    # Exclude D67 content-what questions
     tail = m.group(2).strip()
     if re.fullmatch(r"什么\s*[？?]?", tail):
         return None
     if not write:
         return None
     entity = m.group(1).strip()
-    content = _strip_wrap_quotes(tail)
+    content = clip_d66_content(_strip_wrap_quotes(tail))
     if not entity or not content:
         return Result(ok=False, err="D66 needs entity and content", rule="D66")
     fx.write_content(machine, entity, content)
-    session.push(entity)
+    session.note_content_hit(entity, content, rule="D66")
     return Result(
         ok=True,
         spoken=f"{entity}的内容是{content}",
@@ -688,33 +823,127 @@ def _try_d66(
 
 
 def _try_d67(machine: MachineWorld, session: Session, text: str) -> Result | None:
-    """D67: {实体}的内容是什么 → find of(content,…); 空则 REN2。"""
+    """D67: ask entity content → find of(content,…); empty → REN2."""
     m = _D67.match(text)
     if m is None:
         return None
     entity = m.group(1).strip()
     if not entity:
         return Result(ok=False, err="D67 needs entity", rule="D67")
+    # Session pins disambiguate bare 第N行 → {doc}第N行 when known
+    entity = session.qualify_entity(entity, machine.domain)
     if entity not in machine.domain:
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
-    # QP1：显式 > 推导；facts 插入序；正文可能含逗号，不走字符串 find
-    explicit: list[str] = []
-    inferred: list[str] = []
-    for atom in machine.facts:
-        if atom.pred != "of" or len(atom.args) != 3:
-            continue
-        if atom.args[0] != "content" or atom.args[1] != entity:
-            continue
-        if atom in machine.inferred:
-            inferred.append(atom.args[2])
-        else:
-            explicit.append(atom.args[2])
-    hits = list(dict.fromkeys(explicit + inferred))
+    # QP1 via content side-index (O(1) by entity; not a full-facts scan)
+    hits = machine.contents_of(entity)
     if not hits:
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
     got = _prefer(session, hits)
-    session.push(entity)
+    session.note_content_hit(entity, got, rule="D67")
     return Result(ok=True, spoken=got, rule="D67", focus=entity)
+
+
+def _content_plain_chars(text: str) -> str:
+    """Strip markdown / 第N条 heading; keep non-space characters for 第N个字."""
+    t = (text or "").replace("**", "").replace("　", " ")
+    t = re.sub(r"^第[一二三四五六七八九十百零〇\d]+条\s*", "", t.strip())
+    return re.sub(r"\s+", "", t)
+
+
+def _parse_ord(text: str) -> int | None:
+    from cni.judge import parse_cn_int
+
+    return parse_cn_int(text)
+
+
+def _try_d67_char(
+    machine: MachineWorld, session: Session, text: str
+) -> Result | None:
+    """D67.char / D67.len: nth character or length of entity content."""
+    m = _D67_CHAR.match(text.strip())
+    mlen = None if m else _D67_LEN.match(text.strip())
+    if m is None and mlen is None:
+        return None
+    entity = (m or mlen).group(1).strip()  # type: ignore[union-attr]
+    entity = session.qualify_entity(entity, machine.domain)
+    if entity not in machine.domain:
+        return Result(ok=True, spoken=_empty_q(), rule="REN2")
+    hits = machine.contents_of(entity)
+    if not hits:
+        return Result(ok=True, spoken=_empty_q(), rule="REN2")
+    body = _content_plain_chars(_prefer(session, hits))
+    session.note_content_hit(entity, hits[0] if hits else "", rule="D67.char")
+    if mlen is not None:
+        return Result(
+            ok=True,
+            spoken=str(len(body)),
+            rule="D67.len",
+            focus=entity,
+        )
+    assert m is not None
+    idx = _parse_ord(m.group("n"))
+    if idx is None or idx < 1:
+        return Result(ok=True, spoken=_empty_q(), rule="REN2", focus=entity)
+    if idx > len(body):
+        return Result(
+            ok=True,
+            spoken=_empty_q(),
+            rule="REN2",
+            focus=entity,
+            warn=f"len={len(body)}",
+        )
+    ch = body[idx - 1]
+    return Result(ok=True, spoken=ch, rule="D67.char", focus=entity)
+
+
+def _try_d69(
+    machine: MachineWorld,
+    session: Session,
+    text: str,
+    *,
+    write: bool,
+) -> Result | None:
+    """D69: threshold / enum / tier / ask-slot judgment (rules.tm + limits)."""
+    if write:
+        return None
+    from cni.judge import judge
+    from cni.render.forms import form as form_tm
+    from cni.user_config import judge_cite
+
+    hit = judge(
+        machine,
+        text,
+        pending_topic=session.pending_judge_topic,
+        pending_text=session.pending_judge_text,
+    )
+    if hit is None:
+        return None
+    session.push(hit.topic)
+    if hit.kind == "ask":
+        session.pending_judge_topic = hit.topic
+        session.pending_judge_text = text.strip()
+        if hit.detail.startswith("need_also:"):
+            session.pending_also_key = hit.detail.split(":", 1)[1]
+        else:
+            session.pending_also_key = ""
+        spoken = hit.ask or form_tm("judge_ask") or f"请问{hit.topic}多久？"
+        return Result(ok=True, spoken=spoken, rule="D69.ask", focus=hit.topic)
+    session.pending_judge_topic = ""
+    session.pending_judge_text = ""
+    session.pending_also_key = ""
+    if hit.kind != "answer":
+        return Result(ok=True, spoken=_empty_q(), rule="REN2", focus=hit.topic)
+    spoken = _yes() if hit.ok else _no()
+    src = hit.source
+    if src and judge_cite():
+        spoken = f"{spoken}（见{src}）"
+    return Result(
+        ok=True,
+        spoken=spoken,
+        rule="D69",
+        focus=hit.topic,
+        warn=f"source:{src}" if src else "",
+    )
 
 
 def _is_query(names: list[str]) -> bool:
@@ -738,32 +967,49 @@ def _is_query(names: list[str]) -> bool:
 
 def _clause_split(text: str) -> tuple[str, list[str], str] | None:
     # returns (link_rel, parts, rule_id) or None
-    pairs = [
-        (("虽然", "但是"), "contrast", "D39"),
-        (("虽然", "可是"), "contrast", "D39"),
-        (("因为", "所以"), "cause", "D37"),
-        (("如果", "就"), "condition", "D40"),
-        (("不但", "而且"), "progression", "D45"),
-        (("先", "然后"), "before", "D42"),
-        (("先", "再"), "before", "D42"),
-    ]
-    for (a, b), rel, rule in pairs:
+    sys = load_system()
+    for (a, b), rel, rule in sys.clause_pairs:
         if a in text and b in text:
             left = text.split(a, 1)[1].split(b, 1)[0]
             right = text.split(b, 1)[1]
             return rel, [left.strip("，, "), right.strip("，, ")], rule
-    if "的时候" in text:
-        left, right = text.split("的时候", 1)
-        return "during", [left.strip("，, "), right.strip("，, ")], "D41"
-    if "因此" in text:
-        left, right = text.split("因此", 1)
-        return "cause", [left.strip("，, "), right.strip("，, ")], "D38"
-    if "然后" in text and "先" not in text:
-        left, right = text.split("然后", 1)
-        return "before", [left.strip("，, "), right.strip("，, ")], "D43"
-    if "但是" in text and "虽然" not in text:
-        left, right = text.split("但是", 1)
-        return "contrast", [left.strip("，, "), right.strip("，, ")], "D46"
+    for mark, rel, rule, unless in sys.clause_singles:
+        if mark not in text:
+            continue
+        if unless and unless in text:
+            continue
+        left, right = text.split(mark, 1)
+        return rel, [left.strip("，, "), right.strip("，, ")], rule
+    # 意合 (no explicit conj): A，B → because / then heuristic (D37y / D40y)
+    return _clause_split_yihe(text)
+
+
+_YIHE_CAUSE_LEFT = re.compile(
+    r"(下雨|下雪|刮风|天[冷热黑亮]|地震|停电|堵车|.+了)$"
+)
+
+
+def _clause_split_yihe(text: str) -> tuple[str, list[str], str] | None:
+    """Chinese parataxis: split on first comma when both halves look like clauses."""
+    if "，" not in text and "," not in text:
+        return None
+    # Avoid breaking content / questions that already have WH
+    if any(x in text for x in ("因为", "所以", "虽然", "但是", "如果", "的内容是")):
+        return None
+    sep = "，" if "，" in text else ","
+    left, right = text.split(sep, 1)
+    left, right = left.strip(), right.strip()
+    if len(left) < 2 or len(right) < 2:
+        return None
+    if len(left) > 24 or len(right) > 30:
+        return None
+    # Cause-ish: weather/state + reaction (often with 不/没)
+    if _YIHE_CAUSE_LEFT.search(left) or ("不" in right or "没" in right):
+        if _YIHE_CAUSE_LEFT.search(left) or left.endswith("了"):
+            return "cause", [left, right], "D37y"
+    # Sequential fallback when both sides have enough substance
+    if len(left) >= 3 and len(right) >= 3:
+        return "before", [left, right], "D40y"
     return None
 
 
@@ -778,7 +1024,7 @@ def _decode_clauses(
     if len(parts) != 2 or not all(parts):
         return Result(ok=False, err="bad clause")
     if not write:
-        # 闲聊：优先查已写入的复合关系，再回落各半句 echo
+        # Chat: prefer already-written compound relations, else echo each half
         for atom in machine.facts:
             if atom.pred != "of" or len(atom.args) != 3 or atom.args[0] != rel:
                 continue
@@ -794,14 +1040,36 @@ def _decode_clauses(
     eids: list[str] = []
     spoken = None
     for part in parts:
+        before = _latest_event(machine)
         got = decode(machine, session, part, write=True)
-        if not got.ok:
-            return Result(ok=False, err=got.err or "clause fail", rule=got.rule)
-        spoken = got.spoken or spoken
-        eids.append(_latest_event(machine))
+        after = _latest_event(machine)
+        # 意合 / negation halves often fail or only echo (D57) without a new event —
+        # still allocate a stub so because/then can link the two clauses.
+        if got.ok and after and after != before:
+            eids.append(after)
+            spoken = got.spoken or spoken
+        else:
+            pol = ""
+            if got.ok and (got.rule or "").startswith("D57"):
+                pol = "不"
+            elif got.ok and (got.rule or "").startswith("D58"):
+                pol = "没"
+            eids.append(_stub_clause_event(machine, part, polarity=pol))
+            spoken = got.spoken or spoken or "好的"
     if len(eids) == 2 and eids[0] and eids[1] and eids[0] != eids[1]:
         fx.link(machine, rel, eids[1], eids[0])
-    return Result(ok=True, spoken=spoken, rule=rule, focus=session.focus(0))
+    return Result(ok=True, spoken=spoken or "好的", rule=rule, focus=session.focus(0))
+
+
+def _stub_clause_event(
+    machine: MachineWorld, text: str, *, polarity: str = ""
+) -> str:
+    """Minimal event for a clause half that did not write its own e.N."""
+    eid = fx.write_event(machine, kind="say", agent="other", polarity=polarity)
+    surface = (text or "").strip()
+    if surface:
+        fx.write_content(machine, eid, surface)
+    return eid
 
 
 def _latest_event(machine: MachineWorld) -> str:
@@ -815,15 +1083,23 @@ def _decode_statement(
     senses: list[Sense],
     *,
     write: bool,
-) -> Result:
+    mode: str = "basic",
+) -> Result | None:
     names = _names(senses)
     ents = _ents(senses, session, machine)
     modal, modal_rule = _modal(senses)
     mood = _mood(senses)
     progress = "prog" in names
 
-    # D3 是：表语为类→isa；个体→identity
-    if "copula" in names and "loc" not in names:
+    special = bool(
+        {"ba", "bei", "give_mark", "let", "help", "call", "invite", "cmp", "less", "target_mark", "dest_mark"}
+        & set(names)
+    )
+    if mode == "special" and not special:
+        return None
+
+    # D3 copula: kind predicative → isa; individual → identity (basic; special skips)
+    if mode != "special" and "copula" in names and "loc" not in names:
         if len(ents) < 2:
             return Result(ok=False, err="copula needs two")
         subj, pred = ents[0], ents[1]
@@ -835,7 +1111,7 @@ def _decode_statement(
             fx.write_isa(machine, subj, pred)
             session.push(subj)
             return Result(ok=True, spoken=_say_isa(subj, pred), rule="D3", focus=subj)
-        # 查：先 identity，再 isa
+        # Query: identity first, then isa
         ids = _qfind(machine, session, f"?x of(identity, {subj}, x)")
         if ids.values:
             got = _prefer(session, ids.values)
@@ -846,8 +1122,8 @@ def _decode_statement(
             return Result(ok=True, spoken=_say_isa(subj, got), rule="D3.echo", focus=subj)
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
-    # D6 在 / D4–D5 有
-    if "loc" in names and not any(s.name in _VERBS for s in senses):
+    # D6 loc / D4–D5 have
+    if mode != "special" and "loc" in names and not any(s.name in _VERBS for s in senses):
         if len(ents) < 2:
             return Result(ok=False, err="loc needs two")
         thing, place = ents[0], ents[1]
@@ -865,7 +1141,7 @@ def _decode_statement(
             return Result(ok=True, spoken=_say_located(thing, places.values[0]), rule="D6.echo")
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
-    if "have" in names:
+    if mode != "special" and "have" in names:
         if len(ents) < 2:
             return Result(ok=False, err="have needs two")
         left, right = ents[0], ents[1]
@@ -923,7 +1199,7 @@ def _decode_statement(
             return Result(ok=True, spoken=spoken, rule="D18.echo")
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
-    # D55 X的
+    # D55 possessive X-de
     if "de" in names and len(ents) == 1 and not _verbs_in(senses):
         owner = ents[0]
         hits = _qfind(machine, session, f"?x has({owner}, x)")
@@ -936,14 +1212,14 @@ def _decode_statement(
             return Result(ok=False, err="D55 no possession")
         return Result(ok=True, spoken=_empty_info(), rule="REN2")
 
-    # D56 数+量：补 focus 类，count(isa(?x, 类))
+    # D56 num+clf: supply focus kind, count(isa(?x, kind))
     nums = [s.name for s in senses if s.name.startswith("n") and s.name[1:].isdigit()]
     if nums and "clf" in names and not _verbs_in(senses) and not ents:
         kind = session.focus(0)
         if not kind:
             return Result(ok=False, err="D56 needs focus")
         hits = _qfind(machine, session, f"?x isa(x, {kind})")
-        # focus 若是个体，上溯到其类再计数
+        # If focus is an individual, walk up to its kind then count
         if not hits.values:
             classes = _qfind(machine, session, f"?x isa({kind}, x)")
             if classes.values:
@@ -956,7 +1232,7 @@ def _decode_statement(
         spoken = tpl.replace("{0}", str(n)) + _surf(kind)
         return Result(ok=True, spoken=spoken, rule="D56", focus=kind)
 
-    # D44 和
+    # D44 and/with
     if "with_mark" in names and not _verbs_in(senses):
         if write:
             for e in ents:
@@ -967,7 +1243,7 @@ def _decode_statement(
     # Verb clauses D1/D2/D7–D17/D20 + serial/causative
     verbs = _verbs_in(senses)
     if not verbs:
-        return Result(ok=False, err="no pattern")
+        return None if mode == "special" else Result(ok=False, err="no pattern")
 
     # D15/D12 causative
     cause_i = next((i for i, v in verbs if v in _CAUSE_V), None)
@@ -1024,7 +1300,7 @@ def _simple_verb(
     all_ents = _ents(senses, session, machine)
     degree, freq, scope, when = _extract_mods(senses, all_ents)
 
-    # D8: 在/正在 before verb → progressive (not location)
+    # D8: loc/prog marker before verb → progressive (not location)
     prog = progress or "prog" in names
     if not prog and "loc" in names:
         loc_i = names.index("loc")
@@ -1038,7 +1314,7 @@ def _simple_verb(
     target = ""
     rule = ""
 
-    if "bei" in names:  # D10：施事在 被…动词 之间；省略则 unknown
+    if "bei" in names:  # D10: agent between bei…verb; elided → unknown
         obj = before[0] if before else (session.focus(0) or "")
         bei_i = names.index("bei")
         mid = _ents(senses[bei_i + 1 : vi], session, machine)
@@ -1053,7 +1329,7 @@ def _simple_verb(
         obj = mid[0] if mid else (after[0] if after else "")
         rule = "D9"
     elif "give_mark" in names and kind != "give":
-        # D16 给 as preposition: 主语 给 宾语 V …
+        # D16 give as preposition: subject give_mark object V …
         agent = before[0] if before else "other"
         gi = names.index("give_mark")
         mid = _ents(senses[gi + 1 : vi], session, machine)
@@ -1066,7 +1342,7 @@ def _simple_verb(
             split_at = None
             for i in range(len(blob) - 1, 0, -1):
                 left, right = blob[:i], blob[i:]
-                # 人名至少两字，避免「小」(形容词常量) 被当成间宾
+                # Person names at least 2 chars; avoid treating single-char adj constants as IO
                 if len(left) < 2:
                     continue
                 if left in machine.domain or right in machine.domain or len(right) >= 2:
@@ -1080,7 +1356,7 @@ def _simple_verb(
         elif after:
             obj = after[0]
         rule = "D11"
-    elif "target_mark" in names and kind in {"say", "talk"}:  # D17 仅说/讲/介绍
+    elif "target_mark" in names and kind in {"say", "talk"}:  # D17 say/talk/introduce only
         agent = before[0] if before else "other"
         ti = names.index("target_mark")
         mid = _ents(senses[ti + 1 : vi], session, machine)
@@ -1091,7 +1367,7 @@ def _simple_verb(
         agent = before[0] if before else "other"
         obj = after[0] if after else ""
 
-    # D20：V到处所；运动动词或处所词才挂 destination（避免「吃到苹果」误伤）
+    # D20: V+dest_mark place; attach destination only for motion/place (avoid resultative false hits)
     if "dest_mark" in names and after:
         dest_cand = after[-1]
         motion = kind in {"go", "come"}
@@ -1103,7 +1379,7 @@ def _simple_verb(
                 obj = ""
             rule = "D20"
 
-    # D49 object ellipsis → focus / last object（D54 远指空时不回退近指）
+    # D49 object ellipsis → focus / last object (D54: no near fallback when far empty)
     filled_d49 = False
     if not obj and kind in _TRANS:
         if "that" in names and not session.focus(1):
@@ -1202,7 +1478,7 @@ def _causative(
         obj = session.focus(0) or session.last_to
     if not pivot:
         return Result(ok=False, err="causative needs pivot")
-    # D12 帮；D15 让/叫/使/令/请/派
+    # D12 help; D15 let/call/make/order/invite/send
     rule = "D12" if v1 == "help" else "D15"
     if not write:
         hits = _events(machine, kind=v2, agent=pivot, obj=obj)
@@ -1273,7 +1549,7 @@ def _decode_query(
     names = _names(senses)
     ents = _ents(senses, session, machine)
 
-    # D24 能不能
+    # D24 polar can
     if "polar_can" in names:
         verbs = _verbs_in(senses)
         if not verbs:
@@ -1296,10 +1572,9 @@ def _decode_query(
 
         def _tag_spoken(ok: bool) -> str:
             base = _yes() if ok else _no()
-            if qrule == "D33":
-                return f"{base}，对吧"
-            if qrule == "D34":
-                return f"{base}，是吗"
+            tones = load_system().tag_tones
+            if qrule in tones:
+                return f"{base}{tones[qrule]}"
             return base
 
         if "copula" in cn and len(ce) >= 2:
@@ -1341,7 +1616,7 @@ def _decode_query(
         ok = machine.yes(f"has({a}, {b})") or machine.yes(f"located({b}, {a})")
         return Result(ok=True, spoken=_yes() if ok else _no(), rule="D23")
 
-    # D25 / D26 / D28；对谁 → target（D17 配套查询）
+    # D25 / D26 / D28; to-whom → target (query paired with D17)
     if "who" in names:
         verbs = _verbs_in(senses)
         if not verbs:
@@ -1361,7 +1636,7 @@ def _decode_query(
         vi = verbs[0][0]
         after = _ents(senses[vi + 1 :], session, machine)
         who_i = next(i for i, s in enumerate(senses) if s.name == "who")
-        # 对谁 V → 查 target
+        # to-whom V → query target
         if "target_mark" in names and who_i > names.index("target_mark"):
             agent = (_ents(senses[: names.index("target_mark")], session, machine) or [""])[0]
             hits = _find_role(machine, "target", kind=kind, agent=agent, session=session)
@@ -1381,7 +1656,7 @@ def _decode_query(
             return Result(ok=True, spoken=_surf(hits[0]), rule="D26")
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D27 / QP3：什么→object（有动词）或 isa（无动词）
+    # D27 / QP3: what→object (with verb) or isa (no verb)
     if "what" in names:
         verbs = _verbs_in(senses)
         if verbs:
@@ -1402,7 +1677,7 @@ def _decode_query(
                 )
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D29 在哪里；V哪里 → destination（D20 配套）
+    # D29 where; V+where → destination (paired with D20)
     if "where" in names:
         verbs = _verbs_in(senses)
         if verbs:
@@ -1428,7 +1703,7 @@ def _decode_query(
             return Result(ok=True, spoken=_empty_q(), rule="REN2")
         return Result(ok=False, err="D29 needs entity")
 
-    # D30 怎么
+    # D30 how
     if "how" in names:
         verbs = _verbs_in(senses)
         if not verbs:
@@ -1455,7 +1730,7 @@ def _decode_query(
                 )
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D31 为什么
+    # D31 why
     if "why" in names:
         core = [s for s in senses if s.name != "why"]
         verbs = _verbs_in(core)
@@ -1475,7 +1750,7 @@ def _decode_query(
                 )
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D32 还是
+    # D32 or
     if "or" in names and "copula" in names and len(ents) >= 3:
         subj, a, b = ents[0], ents[1], ents[2]
         if machine.yes(f"isa({subj}, {a})"):
@@ -1484,11 +1759,11 @@ def _decode_query(
             return Result(ok=True, spoken=_say_isa(subj, b), rule="D32")
         return Result(ok=True, spoken=_empty_q(), rule="REN2")
 
-    # D36 多少 / 几个：count(find ?x ∧ isa(?x, 名词))
+    # D36 how-many: count(find ?x ∧ isa(?x, noun))
     if "howmany" in names:
         noun = ""
         subj = ""
-        # 模式：[{主语}] 多少 [{量词}] {名词}
+        # Pattern: [{subject}] how-many [{clf}] {noun}
         how_i = next(i for i, s in enumerate(senses) if s.name == "howmany")
         before = _ents(senses[:how_i], session, machine)
         after = _ents(senses[how_i + 1 :], session, machine)
@@ -1507,7 +1782,7 @@ def _decode_query(
             noun = session.focus(0)
         if not noun:
             return Result(ok=False, err="D36 needs noun")
-        # 聚合：count(find isa(?x, 名词))；有主语时不改变计数语义（表：按名词类）
+        # Aggregate: count(find isa(?x, noun)); subject does not change count semantics (by noun kind)
         del subj
         hits = _qfind(machine, session, f"?x isa(x, {noun})")
         n = len(hits.values)

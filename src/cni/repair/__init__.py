@@ -1,31 +1,28 @@
-"""Input repair E1–E5（表1写死；同音组在代码里，不另开 .tm）。"""
+"""Input repair E1–E5 (homophone groups from system.tm pin_group)."""
 
 from __future__ import annotations
 
-# E2 同音组：组内字 → 规范字（算法数据，非用户词典）
-_PIN_GROUPS: tuple[tuple[str, ...], ...] = (
-    ("机", "积", "基"),
-    ("器", "气", "期"),
-    ("是", "时", "事", "市", "试"),
-    ("有", "又", "友"),
-    ("在", "再"),
-    ("的", "地", "得"),
-    ("和", "合"),
-    ("比", "笔"),
-    ("吗", "嘛"),
-    ("没", "每"),
-    ("不", "部"),
-)
+from functools import lru_cache
+
+from cni.system_tm import load_system
 
 
-def _pins() -> dict[str, str]:
+@lru_cache(maxsize=1)
+def pin_char_map() -> dict[str, str]:
+    """pin_group → single char to canonical; invalidated by clear_tm_caches."""
     out: dict[str, str] = {}
-    for group in _PIN_GROUPS:
+    for group in load_system().pin_groups:
+        if not group:
+            continue
         canon = group[0]
         for ch in group:
             if len(ch) == 1:
                 out[ch] = canon
     return out
+
+
+def clear_pin_map_cache() -> None:
+    pin_char_map.cache_clear()
 
 
 def _lev(left: str, right: str) -> int:
@@ -50,10 +47,10 @@ def _pin_key(text: str, pins: dict[str, str]) -> str:
 def repair(raw: str, vocab: set[str], known: set[str]) -> str:
     """E1 exact → E2 same reading (unique) → E3/E4 toward known only → E5 no insert.
 
-    E3/E4 deliberately ignore closed lex (避免「苹果」→「如果」).
+    E3/E4 deliberately ignore closed lex (avoid mapping open names onto closed lex).
     """
     exact_keys = sorted({*vocab, *known}, key=len, reverse=True)
-    pins = _pins()
+    pins = pin_char_map()
     fuzzy_keys = sorted(
         {k for k in known if len(k) >= 2 and k not in {"me", "other", "here", "now"}},
         key=len,
@@ -69,7 +66,7 @@ def repair(raw: str, vocab: set[str], known: set[str]) -> str:
             i += 1
             continue
         if raw[i] in "，。！、；：,.!;:?？":
-            # 保留标点：五七言分句 / D66 正文逗号；空白仍丢弃
+            # Keep punctuation: 5/7-char verse splits / D66 body commas; still drop whitespace
             out.append(raw[i])
             i += 1
             continue
@@ -110,7 +107,7 @@ def repair(raw: str, vocab: set[str], known: set[str]) -> str:
                 window = raw[i : i + clen]
                 if len(window) < len(key):
                     continue
-                # E3/E4：仅同音组内的错别字/多字，避免「小红」被改成「小明」
+                # E3/E4: only typos/extra chars within a pin group; avoid rewriting distinct open names
                 if _pin_key(window, pins) != _pin_key(key, pins):
                     continue
                 if _lev(window, key) == 1:

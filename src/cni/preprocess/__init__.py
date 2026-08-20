@@ -1,7 +1,7 @@
-"""Preprocess: E → user_dict → F41–50 → G → I(硬编码).
+"""Preprocess: E → user_dict → F41–50 → G → I.
 
-表1写死：E / F41–50 / G / I1–3 / I7–8 / I10–I11
-表2查表：F1–40 / H / I4–6 / I9 → knowledge/user/user_dict.tm
+Table-1 algorithms + system.tm closed sets: E / F41–50 / G / I1–3 / I7–8 / I10–I11
+Table-2 lookup: F1–40 / H / I4–6 / I9 → knowledge/user/user_dict.tm
 """
 
 from __future__ import annotations
@@ -13,72 +13,15 @@ from pathlib import Path
 import re
 
 from cni.kernel.tmutil import clean
-from cni.paths import USER_DIR
+from cni.paths import USER_DIR, WORLD_DIR
 from cni.repair import repair
+from cni.system_tm import load_system
+from cni.text.d66 import D66_CONTENT_RE, clip_d66_content
 
-DEFAULTS_PATH = USER_DIR / "entity_defaults.tm"
+DEFAULTS_PATH = USER_DIR / "config.tm"
+LEGACY_DEFAULTS_PATH = USER_DIR / "entity_defaults.tm"
 USER_DICT_PATH = USER_DIR / "user_dict.tm"
-
-_I_THANKS = {"谢谢", "thanks", "thx", "thank you"}
-_I_GREET = {"你好", "hi", "hello", "您好"}
-_I_BYE = {"再见", "bye", "拜拜"}
-_I_ACK = {"哦", "嗯", "行"}
-_I11_MSG = "我擅长处理事实性问题，不懂诗词赏析。"
-_I11_ASK = ("谁", "什么", "吗", "哪儿", "哪里", "怎么", "为什么", "多少", "几个")
-_I11_CLASSICAL = ("之", "乎", "者", "也", "矣", "焉", "哉")
-# 现代痕迹：有则不作五七言/古汉语拦截（「是」单独放行，以免误伤「疑是地上霜」）
-_I11_MODERN = (
-    "有",
-    "在",
-    "把",
-    "被",
-    "的",
-    "了",
-    "着",
-    "过",
-    "呢",
-    "吧",
-    "啊",
-    "不",
-    "没",
-    "能",
-    "会",
-    "要",
-    "吃",
-    "喝",
-    "看",
-    "去",
-    "来",
-    "走",
-    "到",
-    "对",
-    "给",
-    "帮",
-    "让",
-    "做",
-    "说",
-    "讲",
-    "介绍",
-    "我",
-    "你",
-    "他",
-    "她",
-    "们",
-    "这",
-    "那",
-    "发明",
-    "电脑",
-    "机器",
-    "内容",
-    "因为",
-    "所以",
-    "但是",
-    "如果",
-    "正在",
-    "知道",
-    "喜欢",
-)
-_D66_CONTENT = re.compile(r"^(.+?)\s*的内容是\s*(.+)$")
+SYSTEM_PATH = WORLD_DIR / "system.tm"
 
 
 @dataclass
@@ -95,55 +38,114 @@ class PrepResult:
 
 @lru_cache(maxsize=1)
 def load_entity_defaults(path: Path | None = None) -> dict[str, str]:
-    """G7–G10 系统默认（表1）；可选文件仅作同键覆盖，不新增表2词条逻辑。"""
-    path = path or DEFAULTS_PATH
+    """G7–G10: prefer knowledge/user/config.tm, else entity_defaults.tm."""
     out: dict[str, str] = {
         "几十": "30",
         "大半": "70%",
         "一小会儿": "5分钟",
         "三五": "3-5",
     }
-    if not path.is_file():
-        return out
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = clean(raw)
-        if not line.startswith("default"):
+    paths = []
+    if path is not None:
+        paths.append(path)
+    else:
+        paths.extend((DEFAULTS_PATH, LEGACY_DEFAULTS_PATH))
+    for p in paths:
+        if not p.is_file():
             continue
-        parts = line.split(maxsplit=2)
-        if len(parts) == 3 and parts[1] in out:
-            out[parts[1]] = parts[2]
+        for raw in p.read_text(encoding="utf-8").splitlines():
+            line = clean(raw)
+            if not line.startswith("default"):
+                continue
+            parts = line.split(maxsplit=2)
+            if len(parts) == 3 and parts[1] in out:
+                out[parts[1]] = parts[2]
     return out
+
+
+def load_forbid_user_dict(path: Path | None = None) -> frozenset[str]:
+    """system.tm forbid_user_dict (thin wrapper, no separate cache)."""
+    return load_system(path).forbid_user_dict
+
+
+def load_require_lex(path: Path | None = None) -> frozenset[str]:
+    """system.tm require_lex (thin wrapper, no separate cache)."""
+    return load_system(path).require_lex
+
+
+def _user_dict_src_allowed(src: str) -> bool:
+    """Opt 1: forbid replacing structural words (by surface + lex.ch sense)."""
+    sys = load_system()
+    if src in sys.forbid_user_dict:
+        return False
+    try:
+        from cni.decode.lex import lex_ch
+
+        sense = lex_ch().to_sense.get(src)
+        if sense in sys.struct_senses:
+            return False
+    except Exception:
+        pass
+    return True
 
 
 @lru_cache(maxsize=1)
 def load_user_dict(path: Path | None = None) -> list[tuple[str, str]]:
-    """表2：用户维护的 原文→标准词。返回按原文长度降序，便于最长匹配。"""
-    path = path or USER_DICT_PATH
+    """Table 2: user-maintained source→standard (+ domain *.maps.tm under knowledge/user/)."""
     pairs: list[tuple[str, str]] = []
-    if not path.is_file():
-        return pairs
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = clean(raw)
-        if not line.startswith("map "):
+    files: list[Path] = []
+    if path is not None:
+        files.append(Path(path))
+    else:
+        files.append(USER_DICT_PATH)
+        if USER_DIR.is_dir():
+            files.extend(sorted(USER_DIR.rglob("*.maps.tm")))
+    seen: set[Path] = set()
+    for fpath in files:
+        if fpath in seen or not fpath.is_file():
             continue
-        rest = line[4:].strip()
-        if not rest:
-            continue
-        parts = rest.split(None, 1)
-        src = parts[0]
-        dst = parts[1] if len(parts) > 1 else ""
-        pairs.append((src, dst))
+        seen.add(fpath)
+        for raw in fpath.read_text(encoding="utf-8").splitlines():
+            line = clean(raw)
+            if not line.startswith("map "):
+                continue
+            rest = line[4:].strip()
+            if not rest:
+                continue
+            if rest.startswith('"'):
+                end = rest.find('"', 1)
+                if end < 0:
+                    continue
+                src = rest[1:end]
+                dst = rest[end + 1 :].strip()
+            else:
+                parts = rest.split()
+                if len(parts) >= 2 and not parts[-1].isascii():
+                    src = " ".join(parts[:-1])
+                    dst = parts[-1]
+                else:
+                    src = parts[0]
+                    dst = parts[1] if len(parts) > 1 else ""
+            if not _user_dict_src_allowed(src):
+                continue
+            pairs.append((src, dst))
     pairs.sort(key=lambda item: len(item[0]), reverse=True)
     return pairs
 
 
 def apply_user_dict(text: str, mapping: list[tuple[str, str]] | None = None) -> str:
-    """查表替换（大小写不敏感的拉丁段 + 原文精确替换）。"""
+    """Lookup replace (case-insensitive Latin spans + exact source replace)."""
     mapping = mapping if mapping is not None else load_user_dict()
+    # Opt 1 defense-in-depth: filter skeleton words even if mapping is passed in
+    mapping = [(src, dst) for src, dst in mapping if _user_dict_src_allowed(src)]
     if not mapping:
         return text
+    # Multi-word English phrases before single-word replace (thank you, etc.)
+    for src, dst in mapping:
+        if src.isascii() and " " in src:
+            text = re.sub(re.escape(src), dst, text, flags=re.IGNORECASE)
     # latin tokens (check, yyds, thx…)
-    lower_map = {src.casefold(): dst for src, dst in mapping if src.isascii()}
+    lower_map = {src.casefold(): dst for src, dst in mapping if src.isascii() and " " not in src}
 
     def latin_sub(match: re.Match[str]) -> str:
         key = match.group(0).casefold()
@@ -152,54 +154,118 @@ def apply_user_dict(text: str, mapping: list[tuple[str, str]] | None = None) -> 
         return match.group(0)
 
     text = re.sub(r"[A-Za-z][A-Za-z0-9]*", latin_sub, text)
-    for src, dst in mapping:
-        if src.isascii():
-            continue
-        text = text.replace(src, dst)
+    # Chinese: longest source first; if dst already sits here, do not expand again
+    # (map 试用→试用期 must not turn 试用期 into 试用期期).
+    zh = [(src, dst) for src, dst in mapping if not src.isascii()]
+    zh.sort(key=lambda p: len(p[0]), reverse=True)
+    for src, dst in zh:
+        text = _replace_zh_map(text, src, dst)
     return text
+
+
+def _replace_zh_map(text: str, src: str, dst: str) -> str:
+    if not src or src == dst or src not in text:
+        return text
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text.startswith(src, i):
+            if dst and text.startswith(dst, i):
+                out.append(dst)
+                i += len(dst)
+            else:
+                out.append(dst)
+                i += len(src)
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
 
 
 def apply_f_order(text: str) -> str:
-    """F41–F50 方言语序/形态重排（算法，非查表）。"""
-    # F41 / F48: …V先 / 去X先 → 先…
-    text = re.sub(r"([去来吃看做喝说走读写听玩])先", r"先\1", text)
+    """F41–F50 dialect word-order/morphology rewrite (algorithm; vocab from system.tm)."""
+    sys = load_system()
+    # Sentence-final punctuation: some rules anchor end-of-string; allow optional trailing punct
+    _end = r"(?P<end>[。.!！？?]?)(?=\s*$)"
+
+    _v1 = sys.f_verb_chars
+    _v_multi = sys.f_verb_multi
+    _v_alt = "|".join(re.escape(v) for v in _v_multi) + "|" + "|".join(_v1)
+    _adj = sys.f_adj_chars
+
+    # F48 before F41: "go OBJ first" → "first go OBJ"
+    text = re.sub(rf"去(.+?)先{_end}", r"先去\1\g<end>", text)
     text = re.sub(r"去(.+?)先", r"先去\1", text)
 
-    # F42: 有+V → 曾V过
-    text = re.sub(r"有(吃|看|做|去|来|喝|说|走|读|写|听|玩)", r"曾\1过", text)
+    # F41: "V first" → "first V"; multi-char first; left neighbor not a verb char (avoid false splits)
+    for vo in _v_multi:
+        text = re.sub(rf"{re.escape(vo)}先", f"先{vo}", text)
+    if _v1:
+        text = re.sub(rf"(?<![{_v1}])([{_v1}])先", r"先\1", text)
 
-    # F43: 给…我$ → 给我…
-    text = re.sub(r"给(.+?)我$", r"给我\1", text)
+    # F42: "have + V" → experiential "once V-ed" (keep dialect surfaces; later steps/dict normalize)
+    if _v_alt.strip("|"):
+        text = re.sub(rf"有({_v_alt})", r"曾\1过", text)
 
-    # F44: X形过Y → X比Y形
+    # F43: "give COMPLEMENT me" (sentence-final, optional punct) → "give me COMPLEMENT"
+    text = re.sub(rf"给(.+?)我{_end}", r"给我\1\g<end>", text)
+
+    # F44: "X ADJ guo Y" → "X bi Y ADJ"; trailing intensifiers stay after adj
+    def _f44(m: re.Match[str]) -> str:
+        left, adj, right = m.group(1), m.group(2), m.group(3)
+        tail = ""
+        for t in sorted(sys.f_tail_many, key=len, reverse=True):
+            if right.endswith(t):
+                right, tail = right[: -len(t)], t
+                break
+        return f"{left}比{right}{adj}{tail}"
+
+    if _adj:
+        text = re.sub(
+            rf"([\u4e00-\u9fff]{{1,6}})([{_adj}])过([\u4e00-\u9fff]{{1,8}})",
+            _f44,
+            text,
+        )
+
+    # F45: dialect perfective
+    for dialect, std in sys.f_complete:
+        text = text.replace(dialect, std)
+
+    # F46: fused A-not-A → split form
+    for dialect, std in sys.f_polar:
+        text = text.replace(dialect, std)
+
+    # F47: progressive prefixes (fixed strings, then map, then single-char verbs)
+    for src, dst in sys.f_prog_fixed:
+        text = text.replace(src, dst)
+    for src, dst in sorted(sys.f_prog_map, key=lambda p: len(p[0]), reverse=True):
+        text = text.replace(src, dst)
+    if _v1:
+        text = re.sub(rf"紧([{_v1}])", r"正在\1", text)
+
+    # F49: {noun}+source suffix → source question form
+    suf = re.escape(sys.f_source_suffix)
     text = re.sub(
-        r"([\u4e00-\u9fff]{1,6})([高矮大小好坏强弱快慢长短新旧])过([\u4e00-\u9fff]{1,6})",
-        r"\1比\3\2",
+        rf"([\u4e00-\u9fff]{{1,8}}){suf}{_end}",
+        rf"\1{sys.f_source_rewrite}\g<end>",
         text,
     )
 
-    # F45 / F46
-    text = text.replace("咗", "了")
-    text = text.replace("有冇", "有没有")
-
-    # F47: 进行体标记归一
-    text = re.sub(r"紧食饭", "正在吃饭", text)
-    text = re.sub(r"紧(食|吃|看|做|去|说|走|读|写)", r"正在\1", text)
-
-    # F49 / F50
-    text = re.sub(r"([\u4e00-\u9fff]{1,8})来的$", r"\1是从那里来", text)
-    text = re.sub(r"讲(.+?)我知", r"告诉我\1", text)
+    # F50: dialect "tell … me know" → standard "tell me …"
+    text = re.sub(sys.f_tell_pattern, sys.f_tell_to + r"\1", text)
+    text = text.replace(sys.f_tell_empty, sys.f_tell_to)
 
     return text
 
 
-# 兼容旧测试名
+# Compat old test name
 def apply_f(text: str) -> str:
     return apply_f_order(text)
 
 
 def apply_g(text: str, *, today: date | None = None) -> str:
-    """G1–G10 实体归一化（写死）。"""
+    """G1–G10 entity normalization (hard-coded)."""
     today = today or date.today()
     defaults = load_entity_defaults()
 
@@ -210,7 +276,7 @@ def apply_g(text: str, *, today: date | None = None) -> str:
     text = re.sub(r"(\d+)\s*[kK千]", lambda m: mul(m, 1_000), text)
     text = re.sub(r"(\d+)\s*[mM]", lambda m: mul(m, 1_000_000), text)
     text = re.sub(r"(\d+)\s*百万", lambda m: mul(m, 1_000_000), text)
-    # G1–G3：中文个位数字 × 万/千/百万
+    # G1–G3: Chinese digit × wan / qian / million
     _cn1 = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
     text = re.sub(
         r"([一二两三四五六七八九])\s*万",
@@ -240,13 +306,24 @@ def apply_g(text: str, *, today: date | None = None) -> str:
 
     text = re.sub(r"下周([一二三四五六日天])", next_weekday, text)
 
-    for word, off in {
-        "昨天": -1,
-        "前天": -2,
-        "明天": 1,
-        "后天": 2,
-        "今天": 0,
-    }.items():
+    def last_weekday(m: re.Match[str]) -> str:
+        target = weekday_map[m.group(1)]
+        delta = (today.weekday() - target) % 7
+        if delta == 0:
+            delta = 7
+        return (today - timedelta(days=delta)).isoformat()
+
+    def this_weekday(m: re.Match[str]) -> str:
+        target = weekday_map[m.group(1)]
+        delta = target - today.weekday()
+        return (today + timedelta(days=delta)).isoformat()
+
+    text = re.sub(r"上周([一二三四五六日天])", last_weekday, text)
+    text = re.sub(r"这周([一二三四五六日天])", this_weekday, text)
+    text = re.sub(r"本周([一二三四五六日天])", this_weekday, text)
+
+    # Relative days: longest match first (avoid splitting longer compounds)
+    for word, off in sorted(load_system().rel_days, key=lambda x: len(x[0]), reverse=True):
         if word in text:
             text = text.replace(word, (today + timedelta(days=off)).isoformat())
 
@@ -260,16 +337,17 @@ def apply_g(text: str, *, today: date | None = None) -> str:
 
 
 def apply_i(text: str) -> PrepResult:
-    """I1–I3 / I7–I8 / I10–I11（写死）。I4–I6/I9 已迁 user_dict。"""
+    """I1–I3 / I7–I8 / I10–I11. Closed sets from system.tm; I4–I6/I9 via user_dict."""
+    sys = load_system()
     notes: list[str] = []
     emphasis = ""
     raw = text.strip()
     low = raw.casefold()
 
-    if low in _I_THANKS or raw in _I_THANKS:
+    if low in sys.i_thanks or raw in sys.i_thanks:
         return PrepResult(text=raw, intercept="不客气", intercept_rule="I1", notes=["I1"])
 
-    if low in _I_GREET or raw in _I_GREET:
+    if low in sys.i_greet or raw in sys.i_greet:
         return PrepResult(
             text="你好",
             intercept="你好！",
@@ -278,7 +356,7 @@ def apply_i(text: str) -> PrepResult:
             notes=["I2"],
         )
 
-    if low in _I_BYE or raw in _I_BYE:
+    if low in sys.i_bye or raw in sys.i_bye:
         return PrepResult(
             text=raw,
             intercept="再见！",
@@ -288,16 +366,16 @@ def apply_i(text: str) -> PrepResult:
             notes=["I3"],
         )
 
-    # I11：在 I1–I3 之后、D 之前；含疑问词则不触发
+    # I11: after I1–I3, before D; skip if interrogative words present
     if _i11_poetry(raw):
         return PrepResult(
             text=raw,
-            intercept=_I11_MSG,
+            intercept=sys.i11_msg,
             intercept_rule="I11",
             notes=["I11"],
         )
 
-    if raw in _I_ACK:
+    if raw in sys.i_ack:
         spoken = "我知道了" if raw in {"哦", "嗯"} else "可以"
         return PrepResult(
             text=raw,
@@ -320,25 +398,28 @@ def apply_i(text: str) -> PrepResult:
 
 
 def _i11_poetry(text: str) -> bool:
-    """纯诗句/古汉语：五七言，或含之乎者也且无现代词；有疑问词则否。"""
+    """Pure verse/classical: 5/7-char lines, or classical particles without modern words; not if interrogative."""
+    sys = load_system()
     raw = text.strip()
     if not raw:
         return False
-    if any(q in raw for q in _I11_ASK):
+    if any(q in raw for q in sys.i11_ask):
         return False
     body = re.sub(r"[\s，。！？、；：,.!?;:\"'“”‘’《》【】（）()]+", "", raw)
     if not body or not re.fullmatch(r"[\u4e00-\u9fff]+", body):
         return False
-    modern = any(m in raw for m in _I11_MODERN)
-    if any(p in raw for p in _I11_CLASSICAL) and not modern:
+    modern = any(m in raw for m in sys.i11_modern)
+    factual = _is_factual_copula_line(raw)
+    # Classical particles (之乎者也…) — skip factual copula like「张三是劳动者」(dict 员工→劳动者)
+    if any(p in raw for p in sys.i11_classical) and not modern and not factual:
         return True
-    if _is_wuyan_qiyan(raw) and not modern and not _is_factual_copula_line(raw):
+    if _is_wuyan_qiyan(raw) and not modern and not factual:
         return True
     return False
 
 
 def _is_factual_copula_line(text: str) -> bool:
-    """单句「双字+是+双字」类事实（苹果是水果），与「疑是地上霜」区分。"""
+    """Single-clause factual "X is Y" (both sides >=2 chars); distinguish from classical verse copulas."""
     parts = re.split(r"[，。！？；、,.!?;:\s]+", text.strip())
     clauses = [re.sub(r"[^\u4e00-\u9fff]", "", p) for p in parts if p.strip()]
     if len(clauses) != 1:
@@ -351,12 +432,32 @@ def _is_factual_copula_line(text: str) -> bool:
 
 
 def _is_wuyan_qiyan(text: str) -> bool:
-    """分句后每句（去标点）为 5 或 7 汉字。"""
+    """After splitting, each clause (punct stripped) is 5 or 7 CJK chars."""
     parts = re.split(r"[，。！？；、,.!?;:\s]+", text.strip())
     clauses = [re.sub(r"[^\u4e00-\u9fff]", "", p) for p in parts if p.strip()]
     if not clauses:
         return False
     return all(len(c) in {5, 7} for c in clauses)
+
+
+def apply_doc_query(text: str) -> str:
+    """Normalize line-address questions to D67: …的内容是什么.
+
+    Only physical-line forms (第N行 / 文档第N行). Other structure (条/章/…)
+    must come from CNI rules or user D66 teaching — not importer heuristics.
+    """
+    s = text.strip()
+    s = re.sub(
+        r"(第\d+行)(?:的内容)?(?:有什么|是什么|什么内容|什么)?\s*[？?]?\s*$",
+        r"\1的内容是什么",
+        s,
+    )
+    s = re.sub(
+        r"([\u4e00-\u9fff]{2,30})(第\d+行)(?:的内容)?(?:有什么|是什么|什么内容|什么)?\s*[？?]?\s*$",
+        r"\1\2的内容是什么",
+        s,
+    )
+    return s
 
 
 def preprocess(
@@ -366,26 +467,27 @@ def preprocess(
     known: set[str],
     today: date | None = None,
 ) -> PrepResult:
-    """E → user_dict → F41–50 → G → I。D66 正文在 E 之前截出，原样保留。"""
-    stripped = text.strip()
-    d66 = _D66_CONTENT.match(stripped)
+    """E → user_dict → F41–50 → G → I. D66 body is clipped before E and kept verbatim."""
+    stripped = apply_doc_query(text.strip())
+    d66 = D66_CONTENT_RE.match(stripped)
     if d66:
         entity = d66.group(1).strip()
-        content = d66.group(2)  # 不分词、不经 E/G
+        content = clip_d66_content(d66.group(2))  # no tokenize; clip following questions
         entity = repair(entity, vocab, known)
         entity = apply_user_dict(entity)
         entity = apply_f_order(entity)
         entity = apply_g(entity, today=today)
         return apply_i(f"{entity}的内容是{content}")
 
-    text = repair(text, vocab, known)
+    text = repair(stripped, vocab, known)
     text = apply_user_dict(text)
     text = apply_f_order(text)
     text = apply_g(text, today=today)
+    text = apply_doc_query(text)
     return apply_i(text)
 
 
-# 旧名：H 已删，保留 stub 以免外部误用时无属性
+# Old name: built-in H removed; keep stub so external misuse still has the attribute
 def apply_h(text: str) -> str:
-    """已删除内置 H；走 user_dict。"""
+    """Built-in H removed; use user_dict."""
     return apply_user_dict(text)

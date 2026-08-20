@@ -126,12 +126,24 @@
 ! scope : e
 ! forbid : e
 ! content : e
+! 上限 : e
+! 下限 : e
+! 单位 : e
+! 出处 : e
+! 许可 : e
+! 书面约定 : e
 + isa(when, rel)
 + isa(degree, rel)
 + isa(freq, rel)
 + isa(scope, rel)
 + isa(forbid, rel)
 + isa(content, rel)
++ isa(上限, rel)
++ isa(下限, rel)
++ isa(单位, rel)
++ isa(出处, rel)
++ isa(许可, rel)
++ isa(书面约定, rel)
 
 ! 很 : e
 ! 非常 : e

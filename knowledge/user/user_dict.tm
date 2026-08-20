@@ -47,7 +47,12 @@ map 咋 怎么
 map 干啥 做什么
 map 整 做
 
-# --- H1–H10 中英混合 ---
+# --- H1–H10 中英混合（系统不直通英文；先映射成中文再进 I/D）---
+map hello 你好
+map hi 你好
+map bye 再见
+map thanks 谢谢
+map thank you 谢谢
 map check 检查
 map hold 保持
 map update 更新
@@ -67,3 +72,25 @@ map 😭 伤心
 map 😢 伤心
 map 🤔 思考
 map 好吧 接受
+
+# --- Labor-law domain (user layer; colloquial → wording in 劳动法.text) ---
+map laborlaw 劳动法
+map overtime 加班
+map OT 加班
+map 加时 加班
+map 劳保 劳动保护
+map 社保 社会保险
+map 五险一金 社会保险
+map 公司 用人单位
+map 老板 用人单位
+map 员工 劳动者
+map 工人 劳动者
+map 用工单位 用工单位
+map 签合同 订立书面劳动合同
+map 试用 试用期
+map 底薪 最低工资
+map 法定节假日 休息日
+map 裁员 裁减人员
+map 加班费 加班费
+map 不交社保 未依法缴纳社会保险
+map 不缴社保 未依法缴纳社会保险

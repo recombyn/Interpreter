@@ -105,7 +105,7 @@ def write_cmp(machine: MachineWorld, left: str, right: str, prop: str = "") -> N
 
 
 def write_forbid(machine: MachineWorld, verb: str, obj: str = "") -> None:
-    """D59: wire 用 of(forbid, V, O)（lang 无 forbid 谓词）。"""
+    """D59: wire via of(forbid, V, O) (lang has no forbid predicate)."""
     ensure(machine, "forbid")
     ensure(machine, verb)
     if obj:
@@ -164,3 +164,35 @@ def write_content(machine: MachineWorld, entity: str, text: str) -> None:
     ensure(machine, entity)
     ensure(machine, text)
     machine.apply(Msg(act="tell", pred="of", args=["content", entity, text]))
+
+
+def write_limit(
+    machine: MachineWorld,
+    entity: str,
+    value: str,
+    *,
+    key: str = "上限",
+    unit: str = "",
+    source: str = "",
+) -> None:
+    """Numeric threshold: of(上限|下限, entity, value) and optional unit/source."""
+    ensure(machine, key)
+    ensure(machine, entity)
+    ensure(machine, value)
+    machine.apply(Msg(act="tell", pred="of", args=[key, entity, value]))
+    if unit:
+        ensure(machine, "单位")
+        ensure(machine, unit)
+        machine.apply(Msg(act="tell", pred="of", args=["单位", entity, unit]))
+    if source:
+        ensure(machine, "出处")
+        ensure(machine, source)
+        machine.apply(Msg(act="tell", pred="of", args=["出处", entity, source]))
+
+
+def write_permit(machine: MachineWorld, entity: str, value: str) -> None:
+    """Enum allow-list: of(许可, entity, value)."""
+    ensure(machine, "许可")
+    ensure(machine, entity)
+    ensure(machine, value)
+    machine.apply(Msg(act="tell", pred="of", args=["许可", entity, value]))

@@ -10,18 +10,17 @@ from cni.decode.lex import pick_lex
 from cni.kernel import MachineWorld
 from cni.preprocess import PrepResult, preprocess
 from cni.session import Session
-
-_TEACH_PREFIX = ("教", "记住", "学习", "记")
+from cni.system_tm import load_system
 
 
 def is_teach(text: str, *, mode: str | None = None) -> bool:
     if mode == "teach":
         return True
-    return any(text.startswith(p) for p in _TEACH_PREFIX)
+    return any(text.startswith(p) for p in load_system().teach_prefix)
 
 
 def strip_teach(text: str) -> str:
-    for p in _TEACH_PREFIX:
+    for p in load_system().teach_prefix:
         if text.startswith(p):
             return text[len(p) :].lstrip(" ：:")
     return text
@@ -75,7 +74,7 @@ def _handle_intercept(
         machine.tell(f"of(mood, {eid}, farewell)")
         session.note(event=eid)
     elif prep.intercept_rule == "I10" and write:
-        # I10：补 other 为施事，防无主语句死锁
+        # I10: supply other as agent to avoid agentless-sentence deadlock
         eid = fx.new_event(machine)
         machine.tell(f"of(kind, {eid}, say)")
         machine.tell(f"of(agent, {eid}, other)")
@@ -107,7 +106,7 @@ def hear(
     if prep.intercept is not None:
         return _handle_intercept(machine, session, prep, write=True)
     got = decode(machine, session, prep.text, write=True)
-    # RO3：解码失败或口头结果为空 → 不降级闲聊
+    # RO3: decode failure or empty spoken → do not fall back to chat
     if not got.ok or not (got.spoken or "").strip():
         return Result(
             ok=False,
@@ -128,11 +127,38 @@ def turn(
     *,
     today: date | None = None,
 ) -> Result:
-    """RO2 read-only path：绝不写库。"""
-    prep = _prep(machine, text, today=today)
+    """RO2 read-only path: never write the world."""
+    raw_user = text.strip()
+    # MEM4: short follow-up → D67 on pinned entity (session pins only; no open search)
+    expanded = session.expand_short_ask(raw_user, domain=machine.domain)
+    if expanded:
+        raw_user = expanded
+
+    prep = _prep(machine, raw_user, today=today)
     if prep.intercept is not None:
         return Result(ok=True, spoken=prep.intercept, rule=prep.intercept_rule)
-    got = decode(machine, session, prep.text, write=False)
+    try:
+        got = decode(machine, session, prep.text, write=False)
+    except ValueError as exc:
+        return Result(ok=False, err=str(exc), rule="ERR")
+    # Unify empty / failed chat answers to REN2 spoken form
+    if not (got.spoken or "").strip():
+        from cni.decode import _empty_q
+
+        got = Result(
+            ok=True,
+            spoken=_empty_q(),
+            rule=got.rule or "REN2",
+            focus=got.focus,
+            err=got.err,
+            confidence=got.confidence,
+            warn=got.warn,
+        )
+    # Drop stale D69.ask pending once another rule answered
+    if (got.rule or "") not in {"D69", "D69.ask"} and session.pending_judge_topic:
+        session.pending_judge_topic = ""
+        session.pending_judge_text = ""
+        session.pending_also_key = ""
     return got
 
 

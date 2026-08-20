@@ -7,6 +7,8 @@ out unknown_info 我不了解这个信息
 out teach_err 教学格式错误
 out rhetorical 我不知道
 out count 有{0}个
+out ambig 这句话可能有多种理解。请说得更具体一些。
+out judge_ask 请问具体数值是多少？
 
 form isa {
   out say.isa {0}是{1}

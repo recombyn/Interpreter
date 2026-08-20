@@ -19,3 +19,6 @@ runtime/*.tm
 knowledge/**/*.txt
 knowledge/**/design.*
 *系列.txt
+
+# Generated user content store (rebuild via sync_user_docs)
+knowledge/user/.content/

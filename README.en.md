@@ -86,11 +86,10 @@ of(content, 静夜思, 床前明月光) # content
 
 | Layer | Content | Count | Owner |
 | --- | --- | --- | --- |
-| **Table 1 (hard-coded)** | Syntax / fix / order / time / social core algorithms | 110 | Engine kernel |
+| **Table 1 (kernel)** | Syntax / fix / order / time / social core algorithms | 110 | Engine kernel |
 | **Table 2 (user)** | Abbreviations, dialect, CN–EN mix, emoji maps, etc. | 54 | `user_dict.tm` |
 
-Table 1 is algorithm, not a lookup table—users neither can nor need to edit it.  
-Table 2 is a lexicon you customize as needed.
+Table 1 is algorithm; Table 2 is lexicon maps.
 
 ## What you can do
 
@@ -159,5 +158,5 @@ docs/
 ## Docs
 
 - **Rule catalog**: [docs/rules.en.md](docs/rules.en.md) (Chinese patterns: [规则全表.md](docs/规则全表.md))
-- **Architecture & guide**: [docs/guide.en.md](docs/guide.en.md)
-- **中文**: [README.md](README.md)
+- **Architecture & guide**: [docs/guide.en.md](docs/guide.en.md) (includes **user-layer `.tm` syntax**: `!` / `+`, labor-law file split, D69 `rules`/`limits`)
+- **中文**: [README.md](README.md) · [docs/指南.md](docs/指南.md)
