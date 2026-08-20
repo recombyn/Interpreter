@@ -43,17 +43,17 @@ CNI aims to be **controllable, explainable, extensible, and hallucination-free**
 
 ## Comparison
 
-| Capability | &emsp;&emsp;Regex&emsp;&emsp; | &emsp;Traditional NLP&emsp; | &emsp;&emsp;LLM&emsp;&emsp; | &emsp;**CNI**&emsp; |
+| Cap. | &emsp;&emsp;Regex&emsp;&emsp; | &emsp;Traditional NLP&emsp; | &emsp;&emsp;LLM&emsp;&emsp; | &emsp;**CNI**&emsp; |
 | --- | :---: | :---: | :---: | :---: |
-| Understand NL structure | &emsp;✗&emsp; | △ (corpus-trained) | &emsp;✓&emsp; | ✓ (symbolic rules) |
-| Auditable results | &emsp;✓&emsp; | &emsp;△&emsp; | ✗ (black box) | ✓ (step-by-step) |
+| NL structure | &emsp;✗&emsp; | △ (corpus) | &emsp;✓&emsp; | ✓ (rules) |
+| Auditable | &emsp;✓&emsp; | &emsp;△&emsp; | ✗ (black box) | ✓ (trace) |
 | Zero hallucination | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| Many constructions (ba/bei, questions, complexes…) | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (65 D-rules) |
-| Typo / homophone correction | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (E-series) |
-| Dialect / colloquial input | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓ (F/G-series) |
-| No internet / no API cost | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| User-extensible lexicon | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓ (`user_dict.tm`) |
-| Clear knowledge boundary | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| Constructions | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (65 D) |
+| Typo / homophone | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (E) |
+| Dialect / colloquial | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓ (F/G) |
+| Offline / no API | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| Extensible lexicon | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓ (`user_dict`) |
+| Clear boundary | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
 
 ## Design
 

@@ -43,16 +43,16 @@ CNI 的设计目标是：**可控、可解释、可扩展、零幻觉**。
 
 ## 与其他方案对比
 
-| 能力 | &emsp;&emsp;正则&emsp;&emsp; | &emsp;传统 NLP&emsp; | &emsp;大模型（LLM）&emsp; | &emsp;**CNI**&emsp; |
+| 能力 | &emsp;&emsp;正则&emsp;&emsp; | &emsp;传统 NLP&emsp; | &emsp;大模型&emsp; | &emsp;**CNI**&emsp; |
 | --- | :---: | :---: | :---: | :---: |
-| 理解自然语言结构 | &emsp;✗&emsp; | △（依赖语料训练） | &emsp;✓&emsp; | ✓（符号规则） |
-| 结果可审计 | &emsp;✓&emsp; | &emsp;△&emsp; | ✗（黑盒） | ✓（每步可追踪） |
+| 自然语言结构 | &emsp;✗&emsp; | △（语料） | &emsp;✓&emsp; | ✓（规则） |
+| 可审计 | &emsp;✓&emsp; | &emsp;△&emsp; | ✗（黑盒） | ✓（可追踪） |
 | 零幻觉 | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| 支持多种句式（把/被/疑问/复句…） | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（65条 D 规则） |
-| 纠错（错别字/同音字） | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（E 系列） |
-| 方言/口语输入 | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓（F/G 系列） |
-| 无需互联网 / 无 API 费用 | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| 用户可扩展词典 | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓（`user_dict.tm`） |
+| 多种句式 | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（65 D） |
+| 错别字/同音 | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓（E） |
+| 方言/口语 | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓（F/G） |
+| 离线/无 API | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| 可扩展词典 | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓（`user_dict`） |
 | 知识边界清晰 | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
 
 ## 设计原理
