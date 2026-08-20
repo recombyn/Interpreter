@@ -20,17 +20,27 @@ from cni.user_config import clear_user_config_cache
 
 
 def _yesish(spoken: str) -> bool:
-    return spoken.startswith(("是的", "true", "是")) or spoken in {"是的", "true", "是"}
+    s = spoken or ""
+    if any(x in s for x in ("不合法", "不合规", "不可以", "不是")):
+        return False
+    return any(x in s for x in ("合法", "合规", "可以", "是的")) or s.startswith(
+        ("true", "是", "要")
+    )
 
 
 def _noish(spoken: str) -> bool:
-    return spoken.startswith(("不是", "false", "否")) or spoken in {"不是", "false", "否"}
+    s = spoken or ""
+    return any(x in s for x in ("不合法", "不合规", "不可以", "不是", "false", "否"))
 
 
 def test_parse_duration_cn_and_digit():
     assert parse_cn_int("六") == 6
     d = parse_duration("六个月")
     assert d is not None and d.value == 6 and d.unit == "月"
+    half = parse_duration("半个月")
+    assert half is not None and half.value == 0.5 and half.unit == "月"
+    one_half = parse_duration("一个半月")
+    assert one_half is not None and one_half.value == 1.5 and one_half.unit == "月"
 
 
 def test_compare_ops():
@@ -55,6 +65,77 @@ def test_d69_yes_within_limit_with_cite():
     assert got.rule == "D69"
     assert _yesish(got.spoken)
     assert "劳动法第" in got.spoken or "见" in got.spoken
+
+
+def test_d69_半个月_合法():
+    """半个月 ≤ 上限6月 → 合法；勿再掉进 D21。"""
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期半个月合法吗")
+    assert got.rule == "D69"
+    assert _yesish(got.spoken)
+
+
+def test_polar_form_override_是否(tmp_path, monkeypatch):
+    """用户 form 可把谓词改成 是/否（short 模式）。"""
+    import cni.render.forms as F
+
+    (tmp_path / "form.tm").write_text(
+        "out polar.mode short\nout polar.合法.yes 是\nout polar.合法.no 否\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(F, "USER_DIR", tmp_path)
+    F.clear_forms_cache()
+    assert F.polar_spoken("试用期六个月合法吗", True, trigger="合法吗") == "是"
+    assert F.polar_spoken("试用期七个月合法吗", False, trigger="合法吗") == "否"
+    F.clear_forms_cache()
+
+
+def test_polar_clause_human_order():
+    from cni.render.forms import clear_forms_cache, polar_spoken
+
+    clear_forms_cache()
+    assert (
+        polar_spoken("试用期半个月合法吗", True, trigger="合法吗")
+        == "试用期半个月合法"
+    )
+    assert (
+        polar_spoken("试用期七个月合法吗", False, trigger="合法吗")
+        == "试用期七个月不合法"
+    )
+
+
+def test_multi_fire_two_d69():
+    """一句里两个判定子句 → 各答一次，不是问号硬切。"""
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期六个月合法吗竞业限制二年合法吗")
+    assert "合法" in got.spoken and "；" in got.spoken
+    assert "D69" in (got.rule or "")
+
+
+def test_multi_fire_d67_and_d69():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "劳动法第84行的内容是什么试用期六个月合法吗")
+    assert "；" in got.spoken
+    assert "合法" in got.spoken
+
+
+def test_long_prefix_peel_d67():
+    clear_judge_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    prefix = "本人已阅读材料并知悉应当依法订立劳动合同。"
+    got = turn(w, s, prefix + "劳动法第84行的内容是什么")
+    assert got.rule == "D67"
+    assert got.spoken and got.spoken != "我不知道"
 
 
 def test_d69_no_over_limit():

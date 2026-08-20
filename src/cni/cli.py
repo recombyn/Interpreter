@@ -54,7 +54,7 @@ def _run_gui(interp: Interpreter) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="CNI: rule-based interpreter (no LLM).")
+    parser = argparse.ArgumentParser(description="Interpreter: rule-based NLU (no LLM).")
     parser.add_argument("--rules-path", help="optional rules.tm path")
     parser.add_argument("--infer-depth", type=int, default=2, help="QP2 depth (default 2)")
     sub = parser.add_subparsers(dest="cmd", required=True)

@@ -20,6 +20,14 @@ _D67_CHAR = re.compile(
 )
 _D67_LEN = re.compile(r"^(.+?)(?:的)?(?:有多少字|多少字|字数(?:是多少)?)\s*[？?]?\s*$")
 
+# Multi-fire: D67.char mid-utterance; D67/D67.len use needle scan
+_D67_CHAR_FIND = re.compile(
+    r"(?P<entity>.{1,40}?)(?:的)?第(?P<n>\d+|[一二三四五六七八九十百零〇两]+)"
+    r"个字(?:是什么|是啥|是哪|为)?"
+)
+
+_SPAN_BREAK = set("？?。；;，,、\n\r\t ")
+
 _VERBS = {
     "invent",
     "buy",
@@ -447,28 +455,27 @@ def _say_has(owner: str, thing: str) -> str:
 def _yes() -> str:
     from cni.render.forms import form as form_tm
 
-    # User form.tm / reply_mode overrides win over lex
-    return form_tm("yes") or form_of("yes") or "是的"
+    return form_tm("yes") or ""
 
 
 def _no() -> str:
     from cni.render.forms import form as form_tm
 
-    return form_tm("no") or form_of("no") or "不是"
+    return form_tm("no") or ""
 
 
 def _empty_q() -> str:
     """REN2 question: the rule ran and find returned empty."""
     from cni.render.forms import form as form_tm
 
-    return form_tm("unknown_q") or form_of("unknown_q") or "我不知道"
+    return form_tm("unknown_q") or ""
 
 
 def _empty_info() -> str:
     """REN2 statement: the rule ran and find returned empty."""
     from cni.render.forms import form as form_tm
 
-    return form_tm("unknown_info") or form_of("unknown_info") or "我不了解这个信息"
+    return form_tm("unknown_info") or ""
 
 
 def _role(machine: MachineWorld, src: str, rel: str) -> str:
@@ -576,6 +583,150 @@ def _decode_neg_query(
     return Result(ok=False, err="no query rule", rule=rule)
 
 
+def _clause_before_needle(
+    text: str, needle_start: int, needle: str
+) -> tuple[int, int, str] | None:
+    """Entity/clause immediately before needle, bounded by punctuation."""
+    i = needle_start
+    j = i
+    while j > 0 and text[j - 1] not in _SPAN_BREAK and (i - j) < 40:
+        j -= 1
+    while j < i and text[j] in _SPAN_BREAK:
+        j += 1
+    if j >= i:
+        return None
+    end = i + len(needle)
+    frag = text[j:end].strip()
+    frag = re.sub(r"[？?\s]+$", "", frag)
+    if not frag:
+        return None
+    return j, end, frag
+
+
+def _collect_content_spans(text: str) -> list[tuple[int, int, str, str]]:
+    """(start, end, kind, fragment) for D67 / D67.char / D67.len clauses."""
+    raw = text or ""
+    cands: list[tuple[int, int, str, str]] = []
+
+    needle = "的内容是什么"
+    start = 0
+    while True:
+        i = raw.find(needle, start)
+        if i < 0:
+            break
+        got = _clause_before_needle(raw, i, needle)
+        if got is not None:
+            s, e, frag = got
+            if _D67.match(frag):
+                cands.append((s, e, "D67", frag))
+        start = i + 1
+
+    for m in _D67_CHAR_FIND.finditer(raw):
+        full_ent = m.group("entity")
+        ent = full_ent
+        for br in ("？", "?", "。", "；", ";", "，", ",", "、", " ", "\t"):
+            if br in ent:
+                ent = ent.split(br)[-1]
+        ent = ent.strip()
+        if not ent:
+            continue
+        off = full_ent.rfind(ent)
+        if off < 0:
+            continue
+        ent_pos = m.start("entity") + off
+        frag = re.sub(r"[？?\s]+$", "", raw[ent_pos : m.end()].strip())
+        if _D67_CHAR.match(frag):
+            cands.append((ent_pos, m.end(), "D67.char", frag))
+
+    for needle in ("有多少字", "多少字", "字数是多少"):
+        start = 0
+        while True:
+            i = raw.find(needle, start)
+            if i < 0:
+                break
+            got = _clause_before_needle(raw, i, needle)
+            if got is not None:
+                s, e, frag = got
+                if _D67_LEN.match(frag):
+                    cands.append((s, e, "D67.len", frag))
+            start = i + 1
+
+    return cands
+
+
+def _dedupe_spans(
+    spans: list[tuple[int, int, str, str]],
+) -> list[tuple[int, int, str, str]]:
+    spans = sorted(spans, key=lambda x: (x[0], -(x[1] - x[0])))
+    out: list[tuple[int, int, str, str]] = []
+    last_end = -1
+    for s, e, kind, frag in spans:
+        if s < last_end:
+            continue
+        out.append((s, e, kind, frag))
+        last_end = e
+    return out
+
+
+def _try_multi_query(
+    machine: MachineWorld, session: Session, text: str, *, write: bool
+) -> Result | None:
+    """One utterance → multiple D67/D69 fires (pattern spans), not punct-splitting.
+
+    Also peels a single mid-sentence query out of long prefixes.
+    """
+    if write:
+        return None
+    from cni.judge import find_judge_spans
+
+    spans: list[tuple[int, int, str, str]] = []
+    spans.extend(_collect_content_spans(text))
+    for s, e, frag in find_judge_spans(text):
+        spans.append((s, e, "D69", frag))
+    spans = _dedupe_spans(spans)
+    if not spans:
+        return None
+
+    parts: list[str] = []
+    rules: list[str] = []
+    focus = ""
+    for _s, _e, kind, frag in spans:
+        if kind == "D69":
+            got = _try_d69(machine, session, frag, write=False)
+        elif kind == "D67":
+            got = _try_d67(machine, session, frag)
+        else:
+            got = _try_d67_char(machine, session, frag)
+        if got is None:
+            continue
+        if got.spoken:
+            parts.append(got.spoken.strip())
+        rules.append(got.rule or kind)
+        if got.focus:
+            focus = got.focus
+
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return Result(
+            ok=True,
+            spoken=parts[0],
+            rule=rules[0] if rules else "MULTI",
+            focus=focus,
+        )
+    uniq_rules: list[str] = []
+    for r in rules:
+        if r not in uniq_rules:
+            uniq_rules.append(r)
+    return Result(
+        ok=True,
+        spoken="；".join(parts),
+        rule="+".join(uniq_rules) if len(uniq_rules) <= 3 else "MULTI",
+        focus=focus,
+        warn=f"fires:{len(parts)}",
+    )
+
+
 def decode(
     machine: MachineWorld,
     session: Session,
@@ -591,7 +742,12 @@ def decode(
     if session.reset_if(raw):
         return Result(ok=True, spoken="好的", rule="MEM3")
 
-    # D66 / D67 / D69: content + judgment early exit (must run before tokenize)
+    # Multi-fire / mid-sentence query spans (before single full-string early exit)
+    multi = _try_multi_query(machine, session, raw, write=write)
+    if multi is not None:
+        return multi
+
+    # D66 / D67 / D69: content + judgment early exit (basic group; must run before tokenize)
     d66 = _try_d66(machine, session, raw, write=write)
     if d66 is not None:
         return d66
@@ -619,7 +775,9 @@ def decode(
             machine.tell(f"of(kind, {eid}, greet)")
             machine.tell(f"of(agent, {eid}, other)")
             machine.tell(f"of(object, {eid}, me)")
-        return Result(ok=True, spoken=form_of("greet", lex) or "你好", rule="greet")
+        from cni.render.forms import form as form_tm
+
+        return Result(ok=True, spoken=form_tm("greet") or "", rule="greet")
 
     senses = _fill_ellipsis(senses, session, write=write)
     names = _names(senses)
@@ -673,9 +831,7 @@ def decode(
     if mode == "clarify":
         from cni.render.forms import form as form_tm
 
-        spoken = form_tm("ambig") or (
-            f"这句话可能有多种理解（{' / '.join(rules)}）。请说得更具体一些。"
-        )
+        spoken = form_tm("ambig") or ""
         return Result(
             ok=True,
             spoken=spoken,
@@ -710,7 +866,9 @@ def _try_bucket(
     """Opt 3: try by route.tm group; on miss return None to fall through to next group."""
     if bucket == "query":
         if "rhetorical" in names:
-            return Result(ok=True, spoken=form_of("rhetorical") or _empty_q(), rule="D35")
+            from cni.render.forms import form as form_tm
+
+            return Result(ok=True, spoken=form_tm("rhetorical") or _empty_q(), rule="D35")
         if _is_query(names):
             return _decode_query(machine, session, senses, write=write)
         return None
@@ -904,13 +1062,15 @@ def _try_d69(
         return None
     from cni.judge import judge
     from cni.render.forms import form as form_tm
+    from cni.render.forms import polar_spoken
     from cni.user_config import judge_cite
 
+    pending_q = session.pending_judge_text
     hit = judge(
         machine,
         text,
         pending_topic=session.pending_judge_topic,
-        pending_text=session.pending_judge_text,
+        pending_text=pending_q,
     )
     if hit is None:
         return None
@@ -924,12 +1084,19 @@ def _try_d69(
             session.pending_also_key = ""
         spoken = hit.ask or form_tm("judge_ask") or f"请问{hit.topic}多久？"
         return Result(ok=True, spoken=spoken, rule="D69.ask", focus=hit.topic)
+    # polarity from original judge question (resume may be bare「六个月」)
+    ask_for_tone = pending_q or text
     session.pending_judge_topic = ""
     session.pending_judge_text = ""
     session.pending_also_key = ""
     if hit.kind != "answer":
         return Result(ok=True, spoken=_empty_q(), rule="REN2", focus=hit.topic)
-    spoken = _yes() if hit.ok else _no()
+    spoken = polar_spoken(
+        ask_for_tone,
+        hit.ok,
+        trigger=getattr(hit, "trigger", "") or "",
+        topic=hit.topic,
+    )
     src = hit.source
     if src and judge_cite():
         spoken = f"{spoken}（见{src}）"
@@ -1224,7 +1391,7 @@ def _decode_statement(
         n = len(hits.values)
         from cni.render.forms import form as form_tm
 
-        tpl = form_of("count") or form_tm("count") or "有{0}个"
+        tpl = form_tm("count") or ""
         spoken = tpl.replace("{0}", str(n)) + _surf(kind)
         return Result(ok=True, spoken=spoken, rule="D56", focus=kind)
 
@@ -1784,7 +1951,7 @@ def _decode_query(
         n = len(hits.values)
         from cni.render.forms import form as form_tm
 
-        tpl = form_of("count") or form_tm("count") or "有{0}个"
+        tpl = form_tm("count") or ""
         spoken = tpl.replace("{0}", str(n)) + _surf(noun)
         return Result(ok=True, spoken=spoken, rule="D36", focus=noun)
 

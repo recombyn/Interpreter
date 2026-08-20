@@ -444,7 +444,7 @@ def apply_doc_query(text: str) -> str:
     """Normalize line-address questions to D67: …的内容是什么.
 
     Only physical-line forms (第N行 / 文档第N行). Other structure (条/章/…)
-    must come from CNI rules or user D66 teaching — not importer heuristics.
+    must come from Interpreter rules or user D66 teaching — not importer heuristics.
     """
     s = text.strip()
     s = re.sub(

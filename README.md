@@ -1,6 +1,6 @@
 <div align="center">
 
-# CNI — Concept Network Interpreter
+# Interpreter
 
 <p>
   <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/English-d9d9d9"></a>
@@ -13,7 +13,7 @@
 
 ## What this is
 
-CNI is a **purely symbolic Chinese language understanding engine**.
+Interpreter is a **purely symbolic Chinese language understanding engine**.
 
 You teach it knowledge in natural language; it answers in natural language. There is no neural network underneath—only a readable, auditable, extensible set of symbolic rules.
 
@@ -37,7 +37,7 @@ You ask: "电脑是什么"
 
 **Goals**
 
-CNI aims to be **controllable, explainable, extensible, and hallucination-free**.
+Interpreter aims to be **controllable, explainable, extensible, and hallucination-free**.
 
 - It only knows what you taught it—no guessing, no invention
 - Every inference path is traceable (`--trace`)
@@ -46,7 +46,7 @@ CNI aims to be **controllable, explainable, extensible, and hallucination-free**
 
 ## Comparison
 
-| Capability                        | Regex   | Traditional NLP     | LLM           | CNI                |
+| Capability                        | Regex   | Traditional NLP     | LLM           | Interpreter        |
 | --------------------------------- | ------- | ------------------- | ------------- | ------------------ |
 | Understand NL structure           | ✗       | △ (corpus-trained)  | ✓             | ✓ (symbolic rules) |
 | Auditable results                 | ✓       | △                   | ✗ (black box) | ✓ (step-by-step)   |
@@ -109,6 +109,8 @@ Table 1 is algorithm; Table 2 is lexicon maps.
 - **Inference**: `isa` inheritance chains (depth ≤ 2)
 
 ## Quick start
+
+The Python package and CLI entry remain `cni` (`python -m cni …`).
 
 ```bash
 pip install -e ".[dev]"

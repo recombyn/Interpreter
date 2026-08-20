@@ -221,7 +221,7 @@ def main() -> None:
     OUT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = [
-        "# CNI 300 问法测试报告",
+        "# Interpreter 300 问法测试报告",
         "",
         f"- **有答复**: {ok_n}/300 ({report['ok_rate']*100:.1f}%)",
         f"- **空答复**: {empty}",

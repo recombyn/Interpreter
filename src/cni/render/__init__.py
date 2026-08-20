@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cni.decode.lex import form_of
+from cni.render.forms import form
 
 
 def bare(pred: str, *args: str) -> str:
@@ -10,12 +10,12 @@ def bare(pred: str, *args: str) -> str:
 
 
 def unknown_q() -> str:
-    return form_of("unknown_q") or "我不知道"
+    return form("unknown_q") or ""
 
 
 def unknown_info() -> str:
-    return form_of("unknown_info") or "我不了解这个信息"
+    return form("unknown_info") or ""
 
 
 def teach_err() -> str:
-    return form_of("teach_err") or "教学格式错误"
+    return form("teach_err") or ""

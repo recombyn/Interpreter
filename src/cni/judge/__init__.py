@@ -36,6 +36,14 @@ _DURATION = re.compile(
     r"^\s*(?P<num>\d+|[一二两三四五六七八九十零〇]+)\s*"
     r"(?P<unit>个?月|个月|月|天|日|年)?\s*$"
 )
+# 半个月 / 一个半月 / 两周
+_HALF_DUR = re.compile(
+    r"^\s*(?:(?P<pre>\d+|[一二两三四五六七八九十])\s*个?)?半\s*"
+    r"(?P<unit>个?月|个月|月|天|日|年)\s*$"
+)
+_WEEK_DUR = re.compile(
+    r"^\s*(?P<num>\d+|[一二两三四五六七八九十零〇]+)\s*周\s*$"
+)
 
 _OPS = {
     "le": lambda a, b: a <= b,
@@ -57,7 +65,7 @@ class JudgeRule:
 
 @dataclass(frozen=True)
 class Duration:
-    value: int
+    value: float  # 允许 0.5（半个月）等
     unit: str  # 月 / 天 / 年 / ""
 
 
@@ -78,6 +86,7 @@ class JudgeHit:
     contract: Duration | None = None
     enum_value: str = ""
     need_value: bool = False
+    trigger: str = ""
 
 
 @dataclass(frozen=True)
@@ -90,6 +99,7 @@ class JudgeOutcome:
     detail: str = ""
     ask: str = ""
     source: str = ""
+    trigger: str = ""
 
 
 def clear_judge_cache() -> None:
@@ -193,32 +203,61 @@ def parse_cn_int(text: str) -> int | None:
     return None
 
 
+def _unit_from_raw(unit_raw: str) -> str:
+    u = (unit_raw or "").strip()
+    if "月" in u:
+        return "月"
+    if u in {"天", "日"}:
+        return "天"
+    if "年" in u:
+        return "年"
+    return ""
+
+
+def norm_duration_unit(unit_raw: str) -> str:
+    """Normalize 个月/天/日/年 → 月/天/年 (empty if unknown)."""
+    return _unit_from_raw(unit_raw)
+
+
 def parse_duration(text: str) -> Duration | None:
-    m = _DURATION.match(text or "")
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    hm = _HALF_DUR.match(raw)
+    if hm is not None:
+        pre = hm.group("pre")
+        base = float(parse_cn_int(pre) or 0) if pre else 0.0
+        return Duration(value=base + 0.5, unit=_unit_from_raw(hm.group("unit")))
+    wm = _WEEK_DUR.match(raw)
+    if wm is not None:
+        weeks = parse_cn_int(wm.group("num"))
+        if weeks is None:
+            return None
+        # 周 → 月（约 4 周/月），保留小数供 le 比较
+        return Duration(value=weeks / 4.0, unit="月")
+    m = _DURATION.match(raw)
     if m is None:
         return None
     val = parse_cn_int(m.group("num"))
     if val is None:
         return None
-    unit_raw = (m.group("unit") or "").strip()
-    if "月" in unit_raw:
-        unit = "月"
-    elif unit_raw in {"天", "日"}:
-        unit = "天"
-    elif unit_raw == "年":
-        unit = "年"
-    else:
-        unit = ""
-    return Duration(value=val, unit=unit)
+    return Duration(value=float(val), unit=_unit_from_raw(m.group("unit") or ""))
 
 
 def duration_to_months(dur: Duration) -> int | None:
+    """合同档用整月；不足一月按向上取整（有试用即占档）。"""
+    import math
+
     if dur.unit == "月" or not dur.unit:
-        return dur.value
+        if dur.value <= 0:
+            return 0
+        return int(math.ceil(dur.value - 1e-9))
     if dur.unit == "年":
-        return dur.value * 12
+        return int(math.ceil(dur.value * 12 - 1e-9))
     if dur.unit == "天":
-        return max(1, dur.value // 30)
+        if dur.value <= 0:
+            return 0
+        return max(1, int(math.ceil(dur.value / 30.0 - 1e-9)))
     return None
 
 
@@ -312,7 +351,12 @@ def match_judge(
             probation = parse_duration(m.group(2).strip("，, "))
             if probation is None:
                 continue
-            return JudgeHit(rule=rule, duration=probation, contract=contract)
+            return JudgeHit(
+                rule=rule,
+                duration=probation,
+                contract=contract,
+                trigger=trig,
+            )
 
     for rule in rules:
         for trig in sorted(rule.triggers, key=len, reverse=True):
@@ -323,14 +367,74 @@ def match_judge(
                 continue
             mid = body[len(rule.topic) :].strip()
             if not mid:
-                return JudgeHit(rule=rule, need_value=True)
+                return JudgeHit(rule=rule, need_value=True, trigger=trig)
             if rule.op == "in":
-                return JudgeHit(rule=rule, enum_value=mid)
+                return JudgeHit(rule=rule, enum_value=mid, trigger=trig)
             probation, contract = split_probation_contract(mid)
             if probation is None:
                 continue
-            return JudgeHit(rule=rule, duration=probation, contract=contract)
+            return JudgeHit(
+                rule=rule,
+                duration=probation,
+                contract=contract,
+                trigger=trig,
+            )
     return None
+
+
+def find_judge_spans(
+    text: str, rules: tuple[JudgeRule, ...] | None = None
+) -> list[tuple[int, int, str]]:
+    """Locate judge clauses inside a longer utterance (multi-fire, not punct-split).
+
+    Returns (start, end, fragment) sorted by start. Overlaps dropped (keep earlier).
+    """
+    raw = text or ""
+    if not raw.strip():
+        return []
+    rules = rules if rules is not None else load_judge_rules()
+    cands: list[tuple[int, int, str]] = []
+
+    for rule in rules:
+        for trig in sorted(rule.triggers, key=len, reverse=True):
+            start = 0
+            while True:
+                i = raw.find(trig, start)
+                if i < 0:
+                    break
+                end = i + len(trig)
+                # Prefer 「合同…主题…触发」 window ending at this trigger
+                left = raw[:i]
+                frag: str | None = None
+                frag_start = -1
+                if rule.op != "in":
+                    cidx = left.rfind("合同")
+                    tidx = left.rfind(rule.topic)
+                    if (
+                        cidx >= 0
+                        and tidx > cidx
+                        and match_judge(raw[cidx:end].rstrip("？?")) is not None
+                    ):
+                        frag_start, frag = cidx, raw[cidx:end]
+                if frag is None:
+                    tidx = left.rfind(rule.topic)
+                    if tidx >= 0:
+                        piece = raw[tidx:end]
+                        if match_judge(piece.rstrip("？?")) is not None:
+                            frag_start, frag = tidx, piece
+                if frag is not None and frag_start >= 0:
+                    cands.append((frag_start, end, frag.strip()))
+                start = i + 1
+
+    cands.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+    out: list[tuple[int, int, str]] = []
+    last_end = -1
+    for s, e, frag in cands:
+        if s < last_end:
+            continue
+        out.append((s, e, frag))
+        last_end = e
+    return out
 
 
 def match_duration_only(text: str) -> Duration | None:
@@ -369,6 +473,7 @@ def evaluate_hit(
 ) -> JudgeOutcome:
     rule = hit.rule
     source = of_value(machine, "出处", rule.topic) or ""
+    trig = hit.trigger
     missing = _check_also(machine, rule, waived=waived_also)
     if missing:
         return JudgeOutcome(
@@ -377,6 +482,7 @@ def evaluate_hit(
             detail=f"need_also:{missing}",
             ask=f"请问{rule.topic}是否已「{missing}」？",
             source=source,
+            trigger=trig,
         )
     if hit.need_value:
         if rule.op == "in":
@@ -392,14 +498,23 @@ def evaluate_hit(
             else:
                 ask = f"请问{rule.topic}多久？"
         return JudgeOutcome(
-            kind="ask", topic=rule.topic, detail="need_value", ask=ask, source=source
+            kind="ask",
+            topic=rule.topic,
+            detail="need_value",
+            ask=ask,
+            source=source,
+            trigger=trig,
         )
 
     if rule.op == "in":
         allowed = of_values(machine, "许可", rule.topic)
         if not allowed:
             return JudgeOutcome(
-                kind="miss", topic=rule.topic, detail="no_permit", source=source
+                kind="miss",
+                topic=rule.topic,
+                detail="no_permit",
+                source=source,
+                trigger=trig,
             )
         ok = hit.enum_value in allowed or any(
             hit.enum_value == a or a in hit.enum_value or hit.enum_value in a
@@ -411,6 +526,7 @@ def evaluate_hit(
             ok=ok,
             detail="ok" if ok else "not_in",
             source=source,
+            trigger=trig,
         )
 
     assert hit.duration is not None
@@ -418,7 +534,11 @@ def evaluate_hit(
     unit_s = of_value(machine, "单位", rule.topic)
     if unit_s and dur.unit and unit_s != dur.unit:
         return JudgeOutcome(
-            kind="miss", topic=rule.topic, detail="unit_mismatch", source=source
+            kind="miss",
+            topic=rule.topic,
+            detail="unit_mismatch",
+            source=source,
+            trigger=trig,
         )
     if unit_s and not dur.unit:
         dur = Duration(value=dur.value, unit=unit_s)
@@ -434,17 +554,30 @@ def evaluate_hit(
         limit_s = of_value(machine, rule.key, rule.topic)
         if limit_s is None:
             return JudgeOutcome(
-                kind="miss", topic=rule.topic, detail="no_limit", source=source
+                kind="miss",
+                topic=rule.topic,
+                detail="no_limit",
+                source=source,
+                trigger=trig,
             )
         limit = _parse_limit_num(limit_s)
         if limit is None:
             return JudgeOutcome(
-                kind="miss", topic=rule.topic, detail="bad_limit", source=source
+                kind="miss",
+                topic=rule.topic,
+                detail="bad_limit",
+                source=source,
+                trigger=trig,
             )
 
     ok = compare(rule.op, dur.value, limit)
     return JudgeOutcome(
-        kind="answer", topic=rule.topic, ok=ok, detail="ok", source=source
+        kind="answer",
+        topic=rule.topic,
+        ok=ok,
+        detail="ok",
+        source=source,
+        trigger=trig,
     )
 
 

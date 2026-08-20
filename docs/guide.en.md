@@ -1,6 +1,6 @@
 <div align="center">
 
-# CNI Usage & Design Guide
+# Interpreter Usage & Design Guide
 
 <p>
   <a href="./指南.md"><img alt="简体中文" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>

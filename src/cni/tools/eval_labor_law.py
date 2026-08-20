@@ -1,4 +1,4 @@
-"""Evaluate CNI labor-law capability using user-layer knowledge only.
+"""Evaluate Interpreter labor-law capability using user-layer knowledge only.
 
 Does not modify system world (lex/system.tm). Loads knowledge/user/labor_law.tm
 as memory and exercises teach/query/dict paths.
@@ -274,7 +274,7 @@ def finalize(report: Report) -> None:
     report.by_category = cats
     report.findings = [
         "User-layer memory (labor_law.tm) enables isa/has/content Q&A without touching system lex.",
-        "user_dict aliases (劳动者→员工, OT→加班) let teach path avoid I11 and use CNI-friendly surfaces.",
+        "user_dict aliases (劳动者→员工, OT→加班) let teach path avoid I11 and use Interpreter-friendly surfaces.",
         "Literal 劳动者 is blocked by I11 (classical 者); mitigation must stay in user_dict, not system.tm.",
         "Character pin 时→是 corrupts 小时 before domain knows the open name; seed memory or avoid 时 in first teach.",
         "Empty world correctly returns REN2 for labor questions — knowledge is not baked into system layer.",
@@ -284,7 +284,7 @@ def finalize(report: Report) -> None:
 
 def main() -> int:
     report = Report(
-        title="CNI Labor-Law Capability (User Layer)",
+        title="Interpreter Labor-Law Capability (User Layer)",
         layer="knowledge/user only (labor_law.tm + user_dict.tm)",
         memory_file=str(LABOR_MEMORY),
     )
