@@ -1,8 +1,11 @@
 <div align="center">
 
-**English** · [中文](README.zh.md)
-
 # CNI — Concept Network Interpreter
+
+<p>
+  <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/English-d9d9d9"></a>
+  <a href="./README.zh.md"><img alt="简体中文" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
+</p>
 
 </div>
 
@@ -26,11 +29,11 @@ You ask: "电脑是什么"
 
 **Problem**
 
-| Approach | Limitation |
-| --- | --- |
-| Regex / keyword matching | Narrow coverage; maintenance explodes with input variants |
+| Approach                                      | Limitation                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------- |
+| Regex / keyword matching                      | Narrow coverage; maintenance explodes with input variants     |
 | Traditional NLP (tokenize + POS + dependency) | Heavy toolchain; brittle generalization; rules hard to change |
-| Large language models (LLMs) | Hallucination, opacity, high cost, hard to audit precisely |
+| Large language models (LLMs)                  | Hallucination, opacity, high cost, hard to audit precisely    |
 
 **Goals**
 
@@ -43,17 +46,17 @@ CNI aims to be **controllable, explainable, extensible, and hallucination-free**
 
 ## Comparison
 
-| Cap. | &emsp;&emsp;Regex&emsp;&emsp; | &emsp;Traditional NLP&emsp; | &emsp;&emsp;LLM&emsp;&emsp; | &emsp;**CNI**&emsp; |
-| --- | :---: | :---: | :---: | :---: |
-| NL structure | &emsp;✗&emsp; | △ (corpus) | &emsp;✓&emsp; | ✓ (rules) |
-| Auditable | &emsp;✓&emsp; | &emsp;△&emsp; | ✗ (black box) | ✓ (trace) |
-| Zero hallucination | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| Constructions | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (65 D) |
-| Typo / homophone | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✓&emsp; | ✓ (E) |
-| Dialect / colloquial | &emsp;✗&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; | ✓ (F/G) |
-| Offline / no API | &emsp;✓&emsp; | &emsp;✓&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
-| Extensible lexicon | &emsp;✗&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | ✓ (`user_dict`) |
-| Clear boundary | &emsp;✓&emsp; | &emsp;△&emsp; | &emsp;✗&emsp; | &emsp;✓&emsp; |
+| Capability                        | Regex   | Traditional NLP     | LLM           | CNI                |
+| --------------------------------- | ------- | ------------------- | ------------- | ------------------ |
+| Understand NL structure           | ✗       | △ (corpus-trained)  | ✓             | ✓ (symbolic rules) |
+| Auditable results                 | ✓       | △                   | ✗ (black box) | ✓ (step-by-step)   |
+| Zero hallucination                | ✓       | △                   | ✗             | ✓                  |
+| Many constructions (ba/bei, …)    | ✗       | △                   | ✓             | ✓ (65 D-rules)     |
+| Typo / homophone correction       | ✗       | △                   | ✓             | ✓ (E-series)       |
+| Dialect / colloquial input        | ✗       | ✗                   | ✓             | ✓ (F/G-series)     |
+| No internet / no API cost         | ✓       | ✓                   | ✗             | ✓                  |
+| User-extensible lexicon           | ✗       | △                   | ✗             | ✓ (`user_dict.tm`) |
+| Clear knowledge boundary          | ✓       | △                   | ✗             | ✓                  |
 
 ## Design
 
@@ -88,10 +91,10 @@ of(content, 静夜思, 床前明月光) # content
 
 **Rule layers**
 
-| Layer | Content | Count | Owner |
-| --- | --- | :---: | --- |
-| **Table 1 (kernel)** | Syntax / fix / order / time / social core algorithms | 110 | Engine kernel |
-| **Table 2 (user)** | Abbreviations, dialect, CN–EN mix, emoji maps, etc. | 54 | `user_dict.tm` |
+| Layer                | Content                                              | Count | Owner          |
+| --------------------- | ----------------------------------------------------- | ------ | --------------- |
+| **Table 1 (kernel)** | Syntax / fix / order / time / social core algorithms | 110   | Engine kernel  |
+| **Table 2 (user)**   | Abbreviations, dialect, CN–EN mix, emoji maps, etc.  | 54    | `user_dict.tm` |
 
 Table 1 is algorithm; Table 2 is lexicon maps.
 
