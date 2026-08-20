@@ -1,6 +1,10 @@
+<div align="center">
+
+[中文](指南.md) · **English**
+
 # CNI Usage & Design Guide
 
-[中文](指南.md) · English
+</div>
 
 A symbolic rule engine: natural language in, facts out. **No LLM.**
 

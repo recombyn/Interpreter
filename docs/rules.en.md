@@ -1,13 +1,18 @@
+<div align="center">
+
+[中文](规则全表.md) · **English**
+
 # Full System Rule Catalog (Table 1)
 
-[中文](规则全表.md) · English
+</div>
 
 Ownership follows **Table 1 / Table 2** in [guide.en.md](guide.en.md).
 This English page explains the catalog structure. The authoritative rule rows
 (Chinese surface patterns) live in [规则全表.md](规则全表.md).
 
 Table 1 count = **110** (D1–D65 + E + F41–50 + G + I1–3/I7–8/I10 + RO/WC/QP/MEM/REN).
-Extras D66 / D67 / I11 / MEM4 are kernel extensions and do not change the 110 count.
+Extras D66 / D67 / D69 / I11 / MEM4 are kernel extensions and do not change the 110 count.
+**D68** is retired as a standalone ID: short-ask pinning → **MEM4→D67**; threshold/compliance → **D69** (no open-search rule).
 
 ## Sections
 
@@ -22,8 +27,8 @@ Extras D66 / D67 / I11 / MEM4 are kernel extensions and do not change the 110 co
 <tbody>
 <tr>
 <td align="left">1. Syntactic decode</td>
-<td align="left">D1–D65 (+ D66–D67)</td>
-<td align="left">SVO, ba/bei, questions, complexes, deixis, modality, content</td>
+<td align="left">D1–D65 (+ D66–D67 / D69)</td>
+<td align="left">SVO, ba/bei, questions, complexes, deixis, modality, content, threshold judge</td>
 </tr>
 <tr>
 <td align="left">2. Input repair</td>
@@ -73,7 +78,7 @@ Extras D66 / D67 / I11 / MEM4 are kernel extensions and do not change the 110 co
 </tbody>
 </table>
 
-## Content extras (D66–D67 only)
+## Content & judgment extras (D66–D67 / D69 / MEM4)
 
 <table width="100%">
 <thead>
@@ -89,7 +94,15 @@ Extras D66 / D67 / I11 / MEM4 are kernel extensions and do not change the 110 co
 </tr>
 <tr>
 <td align="left">D67</td>
-<td align="left">Point lookup by entity (memory ∪ sharded store); pin entity/doc/topic</td>
+<td align="left">Point lookup by entity (memory ∪ sharded store); pin entity/doc/topic; O(1) content</td>
+</tr>
+<tr>
+<td align="left">D68</td>
+<td align="left">**Retired / split** — not a live rule. Short-ask → MEM4; compliance → D69. No open full-text search.</td>
+</tr>
+<tr>
+<td align="left">D69</td>
+<td align="left">Threshold / enum judge via user `rules.tm` (`rule`/`tier` + triggers) + `limits.tm`; `D69.ask` if value missing</td>
 </tr>
 <tr>
 <td align="left">MEM4</td>
@@ -98,7 +111,7 @@ Extras D66 / D67 / I11 / MEM4 are kernel extensions and do not change the 110 co
 </tbody>
 </table>
 
-There is **no D68 open-search rule**. Topic questions without a resolvable entity → REN2 / normal D miss. User docs sync to `.tm` + `.content/` for D67 scale.
+There is **no D68 open-search rule**. Triggers in `rules.tm` (e.g. `合法吗|合规吗`) are examples users may extend; matching is by rule pattern, not an unbounded lexicon. User docs sync to `.tm` + `.content/` for D67 scale. Untaught world knowledge is never guessed.
 
 ## Counts
 
@@ -147,9 +160,9 @@ There is **no D68 open-search rule**. Topic questions without a resolvable entit
 <td align="left"></td>
 </tr>
 <tr>
-<td align="left">D66–D67 / I11 / MEM4</td>
-<td align="center">4</td>
-<td align="left">extras (system)</td>
+<td align="left">D66–D67 / D69 / MEM4 / I11</td>
+<td align="center">5</td>
+<td align="left">extras (system); D68 not allocated</td>
 </tr>
 <tr>
 <td align="left">F1–40 + H1–10 + I4–6 + I9</td>
