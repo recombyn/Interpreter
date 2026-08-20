@@ -1,4 +1,4 @@
-"""D1–D67: one ordered decoder. write=True → hear; write=False → turn query/echo."""
+"""D1–D69: one ordered decoder. write=True → hear; write=False → turn query/echo."""
 
 from __future__ import annotations
 
@@ -591,7 +591,7 @@ def decode(
     if session.reset_if(raw):
         return Result(ok=True, spoken="好的", rule="MEM3")
 
-    # D66 / D67: content-clause early exit (basic group; must run before tokenize)
+    # D66 / D67 / D69: content + judgment early exit (must run before tokenize)
     d66 = _try_d66(machine, session, raw, write=write)
     if d66 is not None:
         return d66
@@ -850,16 +850,12 @@ def _content_plain_chars(text: str) -> str:
     return re.sub(r"\s+", "", t)
 
 
-def _parse_ord(text: str) -> int | None:
-    from cni.judge import parse_cn_int
-
-    return parse_cn_int(text)
-
-
 def _try_d67_char(
     machine: MachineWorld, session: Session, text: str
 ) -> Result | None:
     """D67.char / D67.len: nth character or length of entity content."""
+    from cni.judge import parse_cn_int
+
     m = _D67_CHAR.match(text.strip())
     mlen = None if m else _D67_LEN.match(text.strip())
     if m is None and mlen is None:
@@ -881,7 +877,7 @@ def _try_d67_char(
             focus=entity,
         )
     assert m is not None
-    idx = _parse_ord(m.group("n"))
+    idx = parse_cn_int(m.group("n"))
     if idx is None or idx < 1:
         return Result(ok=True, spoken=_empty_q(), rule="REN2", focus=entity)
     if idx > len(body):

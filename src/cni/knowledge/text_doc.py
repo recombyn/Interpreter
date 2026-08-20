@@ -28,15 +28,16 @@ _SKIP_TM = frozenset(
         "rules.tm",
     }
 )
-_SKIP_DIRS = frozenset({".content", ".pytest_cache", "__pycache__", ".git"})
+USER_SKIP_DIRS = frozenset({".content", ".pytest_cache", "__pycache__", ".git"})
 
 
-def _under_skipped_dir(path: Path, root: Path) -> bool:
+def under_skipped_user_dir(path: Path, root: Path) -> bool:
+    """True if path sits under a skipped dir relative to knowledge/user root."""
     try:
         parts = path.relative_to(root).parts
     except ValueError:
         parts = path.parts
-    return any(p in _SKIP_DIRS for p in parts[:-1])
+    return any(p in USER_SKIP_DIRS for p in parts[:-1])
 
 
 @dataclass
@@ -64,7 +65,7 @@ def list_user_texts(user_dir: Path | None = None) -> list[Path]:
     for path in sorted(root.rglob("*")):
         if not is_user_text(path):
             continue
-        if _under_skipped_dir(path, root):
+        if under_skipped_user_dir(path, root):
             continue
         out.append(path)
     return out
@@ -183,7 +184,7 @@ def list_user_memory_tms(user_dir: Path | None = None) -> list[Path]:
         return []
     out: list[Path] = []
     for path in sorted(root.rglob("*.tm")):
-        if _under_skipped_dir(path, root):
+        if under_skipped_user_dir(path, root):
             continue
         if path.name in _SKIP_TM:
             continue

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
-from cni.judge import load_judge_rules, parse_cn_int
+from cni.judge import load_judge_rules, norm_duration_unit, parse_cn_int
 from cni.paths import USER_DIR
 
 # {topic}…不得超过|不多于|最长…不得超过 {num}{unit}
@@ -41,13 +41,7 @@ class Extracted:
 
 
 def _norm_unit(raw: str) -> str:
-    if "月" in raw:
-        return "月"
-    if raw in {"天", "日"}:
-        return "天"
-    if "年" in raw:
-        return "年"
-    return raw
+    return norm_duration_unit(raw) or raw
 
 
 def extract_from_text(
