@@ -24,3 +24,10 @@ para = ["data/world/*.tm"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "L1: unit — preprocess + structural decode facts",
+    "L2: integration — MEM / D66–D69 / WC / QP",
+    "L3: robustness — REN / fuzz / bounded long input",
+    "L4: system — domain isolation / API / eval gates",
+    "stretch: aspirational (perf / leak); not CI-blocking",
+]

@@ -5,7 +5,7 @@ Table-1 algorithms; topics and facts live under knowledge/user/.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 import re
@@ -106,6 +106,10 @@ class JudgeHit:
     trigger: str = ""
     explain: bool = False  # 什么情况下…
     invert_polar: bool = False  # trigger is 违法吗 style
+    also_denied: tuple[str, ...] = ()  # surface 未/没有{also key}
+    alt_durations: tuple[Duration, ...] = ()  # 六个月或者七个月
+    not_duration: bool = False  # 不是六个月
+    unknown_prefix: str = ""  # 劳务派遣…试用期 — unruled topic
 
 
 @dataclass(frozen=True)
@@ -352,6 +356,139 @@ def _check_also(
     return None
 
 
+_DENY_PREFIXES = ("且没有", "且未", "没有", "未")
+
+
+def _surface_denied_also(text: str, keys: frozenset[str] | set[str] | tuple[str, ...]) -> frozenset[str]:
+    """Detect 未{key} / 没有{key} / 且未{key} / 且没有{key} in surface text."""
+    raw = text or ""
+    denied: set[str] = set()
+    for key in keys:
+        if not key:
+            continue
+        for pref in _DENY_PREFIXES:
+            if f"{pref}{key}" in raw:
+                denied.add(key)
+                break
+    return frozenset(denied)
+
+
+def _strip_denied_surface(text: str, denied: frozenset[str] | set[str]) -> str:
+    """Remove surface negation phrases so duration / enum mid can parse."""
+    mid = text or ""
+    for key in sorted(denied, key=len, reverse=True):
+        for pref in _DENY_PREFIXES:
+            mid = mid.replace(f"{pref}{key}", "")
+    return mid.strip("，,且 ")
+
+
+def _enum_parts(enum_value: str) -> list[str] | None:
+    """Split A或B / A或者B; None if no disjunction surface."""
+    raw = (enum_value or "").strip()
+    if not raw:
+        return None
+    if "或者" in raw:
+        parts = [p.strip() for p in raw.split("或者") if p.strip()]
+        return parts if len(parts) >= 2 else None
+    if "或" in raw:
+        parts = [p.strip() for p in raw.split("或") if p.strip()]
+        return parts if len(parts) >= 2 else None
+    return None
+
+
+def _enum_member_ok(part: str, allowed: list[str]) -> bool:
+    return part in allowed or any(
+        part == a or a in part or part in a for a in allowed
+    )
+
+
+def _scan_also_denied(text: str, rule: JudgeRule) -> tuple[str, ...]:
+    keys = frozenset(rule.also) | frozenset({"书面约定"})
+    return tuple(sorted(_surface_denied_also(text, keys)))
+
+
+# Unruled labor subtypes — must not fall through to 试用期 / 竞业限制.
+_FOREIGN_PREFIXES = ("劳务派遣", "非全日制用工", "非全日制")
+_OR_DUR = re.compile(r"或者|或")
+_NOT_DUR = re.compile(r"^不是(.+)$")
+_AND_CLAUSE = re.compile(r"^(.+?)(?:并且|且)(.+)$")
+
+
+def _foreign_before_topic(left: str, topic: str) -> str:
+    """If an unruled prefix sits immediately before topic, return it."""
+    if not left or not topic:
+        return ""
+    head = left.rstrip("的 ")
+    for pref in sorted(_FOREIGN_PREFIXES, key=len, reverse=True):
+        if head == pref or head.endswith(pref):
+            return pref
+    return ""
+
+
+def _split_or_durations(mid: str) -> tuple[Duration, ...] | None:
+    raw = (mid or "").strip("，, ")
+    if not raw or _OR_DUR.search(raw) is None:
+        return None
+    parts = [p.strip("，, ") for p in _OR_DUR.split(raw) if p.strip("，, ")]
+    if len(parts) < 2:
+        return None
+    durs: list[Duration] = []
+    for p in parts:
+        d = parse_duration(p)
+        if d is None:
+            return None
+        durs.append(d)
+    return tuple(durs)
+
+
+def _dur_label(dur: Duration) -> str:
+    n = dur.value
+    n_s = str(int(n)) if float(n).is_integer() else str(n)
+    unit = dur.unit or "月"
+    if unit == "月":
+        mapping = {0.5: "半个月", 1: "一个月", 2: "二个月", 3: "三个月", 6: "六个月", 7: "七个月"}
+        if n in mapping:
+            return mapping[n]
+        return f"{n_s}个月"
+    if unit == "年":
+        return f"{n_s}年"
+    return f"{n_s}{unit}"
+
+
+def _allow_topic_prefix(prefix: str, rule: JudgeRule) -> bool:
+    """Non-empty leading text before topic is only allowed for enum / connector / foreign."""
+    p = (prefix or "").strip("，, ")
+    if not p:
+        return True
+    if rule.op == "in":
+        return True
+    if "书面约定" in p or p.endswith("又"):
+        return True
+    if re.fullmatch(r"(既)?(没有|未)[\u4e00-\u9fff]{0,12}(又)?", p):
+        return True
+    return False
+
+
+def _parse_mid_durations(
+    mid: str,
+) -> tuple[Duration | None, Duration | None, tuple[Duration, ...], bool]:
+    """Return (probation, contract, alt_durations, not_duration)."""
+    mid = (mid or "").strip("，, ")
+    m_not = _NOT_DUR.match(mid)
+    if m_not:
+        d = parse_duration(m_not.group(1).strip())
+        if d is not None:
+            return d, None, (), True
+    alts = _split_or_durations(mid)
+    if alts:
+        return alts[0], None, alts, False
+    if "合同" in mid and _OR_DUR.search(mid):
+        # 合同一年试用期二个月或三个月 — handled by Pattern B + alt on probation side
+        pass
+    probation, contract = split_probation_contract(mid)
+    return probation, contract, (), False
+
+
 def split_probation_contract(mid: str) -> tuple[Duration | None, Duration | None]:
     """Parse mid into (probation, contract?)."""
     mid = (mid or "").strip().strip("，,")
@@ -456,13 +593,27 @@ def match_judge(
             # otherwise junk like「试用期…另外」would still yield a Pattern B hit.
             if contract_raw and contract is None:
                 continue
-            probation = parse_duration(m.group(2).strip("，, "))
+            mid_prob = m.group(2).strip("，, ")
+            denied = _scan_also_denied(body, rule)
+            mid_prob = _strip_denied_surface(mid_prob, frozenset(denied))
+            alts = _split_or_durations(mid_prob)
+            if alts:
+                return JudgeHit(
+                    rule=rule,
+                    duration=alts[0],
+                    contract=contract,
+                    also_denied=denied,
+                    alt_durations=alts,
+                    **_hit_flags(trig, explain=explain),
+                )
+            probation = parse_duration(mid_prob)
             if probation is None:
                 continue
             return JudgeHit(
                 rule=rule,
                 duration=probation,
                 contract=contract,
+                also_denied=denied,
                 **_hit_flags(trig, explain=explain),
             )
 
@@ -471,23 +622,131 @@ def match_judge(
             if not raw.endswith(trig):
                 continue
             body = raw[: -len(trig)]
-            if not body.startswith(rule.topic):
-                continue
-            mid = body[len(rule.topic) :].strip()
             flags = _hit_flags(trig, explain=explain)
-            if not mid:
-                return JudgeHit(rule=rule, need_value=True, **flags)
+            topic_idx = 0 if body.startswith(rule.topic) else body.find(rule.topic)
+            if topic_idx < 0:
+                # Pattern: {enums}{topic}{trig}
+                if rule.op == "in":
+                    idx = body.rfind(rule.topic)
+                    if idx >= 0 and body.endswith(rule.topic):
+                        enum_value = body[:idx].strip()
+                        if enum_value:
+                            denied = _scan_also_denied(body, rule)
+                            return JudgeHit(
+                                rule=rule,
+                                enum_value=enum_value,
+                                also_denied=denied,
+                                **flags,
+                            )
+                continue
+            prefix = body[:topic_idx]
+            foreign = _foreign_before_topic(prefix, rule.topic)
+            mid = body[topic_idx + len(rule.topic) :].strip()
+            denied = _scan_also_denied(body, rule)
+            mid_clean = _strip_denied_surface(mid, frozenset(denied))
+            if foreign:
+                dur_guess, _, alts, not_d = _parse_mid_durations(mid_clean or mid)
+                return JudgeHit(
+                    rule=rule,
+                    duration=dur_guess,
+                    also_denied=denied,
+                    alt_durations=alts,
+                    not_duration=not_d,
+                    unknown_prefix=foreign,
+                    **flags,
+                )
+            if not _allow_topic_prefix(prefix, rule):
+                continue
+            if not mid_clean and not mid:
+                if rule.op == "in" and prefix.strip():
+                    return JudgeHit(
+                        rule=rule,
+                        enum_value=prefix.strip(),
+                        also_denied=denied,
+                        **flags,
+                    )
+                return JudgeHit(
+                    rule=rule, need_value=True, also_denied=denied, **flags
+                )
             if rule.op == "in":
-                return JudgeHit(rule=rule, enum_value=mid, **flags)
-            probation, contract = split_probation_contract(mid)
+                return JudgeHit(
+                    rule=rule,
+                    enum_value=mid_clean or mid,
+                    also_denied=denied,
+                    **flags,
+                )
+            probation, contract, alts, not_d = _parse_mid_durations(mid_clean or mid)
+            if not_d and probation is not None:
+                return JudgeHit(
+                    rule=rule,
+                    duration=probation,
+                    also_denied=denied,
+                    not_duration=True,
+                    **flags,
+                )
+            if alts:
+                return JudgeHit(
+                    rule=rule,
+                    duration=alts[0],
+                    contract=contract,
+                    also_denied=denied,
+                    alt_durations=alts,
+                    **flags,
+                )
             if probation is None:
                 continue
             return JudgeHit(
                 rule=rule,
                 duration=probation,
                 contract=contract,
+                also_denied=denied,
                 **flags,
             )
+    return None
+
+
+_LEGAL_TAILS = (
+    "严格合法吗",
+    "合不合法",
+    "不违法吗",
+    "违法吗",
+    "合规吗",
+    "可以吗",
+    "合法吗",
+)
+
+
+def _and_clause_pair(
+    text: str, rules: tuple[JudgeRule, ...] | None = None
+) -> tuple[str, str, str] | None:
+    """A并且B合法吗 / A且B合法吗 when both sides are judgeable (no 都)."""
+    raw = (text or "").strip().rstrip("？?")
+    if "都" in raw:
+        return None
+    trig = next((t for t in _LEGAL_TAILS if raw.endswith(t)), None)
+    if trig is None:
+        return None
+    body = raw[: -len(trig)]
+    for sep in ("并且", "且"):
+        start = 0
+        while True:
+            i = body.find(sep, start)
+            if i < 0:
+                break
+            left = body[:i].strip("，, ")
+            right = body[i + len(sep) :].strip("，, ")
+            if left and right:
+                h1 = match_judge(left + trig, rules=rules)
+                h2 = match_judge(right + trig, rules=rules)
+                if (
+                    h1 is not None
+                    and h2 is not None
+                    and not h1.unknown_prefix
+                    and not h2.unknown_prefix
+                    and h1.rule.topic != h2.rule.topic
+                ):
+                    return left, right, trig
+            start = i + 1
     return None
 
 
@@ -502,6 +761,7 @@ def find_judge_spans(
     if not raw.strip():
         return []
     rules = rules if rules is not None else load_judge_rules()
+    dual = _and_clause_pair(raw, rules)
     cands: list[tuple[int, int, str]] = []
 
     for rule in rules:
@@ -529,10 +789,44 @@ def find_judge_spans(
                 if frag is None:
                     tidx = left.rfind(rule.topic)
                     if tidx >= 0:
-                        piece = raw[tidx:end]
-                        if match_judge(piece.rstrip("？?")) is not None:
-                            frag_start, frag = tidx, piece
+                        if _foreign_before_topic(left[:tidx], rule.topic):
+                            start = i + 1
+                            continue
+                        if rule.op == "in":
+                            # Prefer {enums}{topic}{trig} over bare topic ask
+                            span_start = 0
+                            for sep in ("且", "另外", "；", ";", "，", ","):
+                                p = left.rfind(sep)
+                                if 0 <= p < tidx:
+                                    span_start = max(span_start, p + len(sep))
+                            piece = raw[span_start:end]
+                            mh = match_judge(piece.rstrip("？?"))
+                            if mh is not None and (
+                                mh.enum_value or mh.need_value
+                            ):
+                                frag_start, frag = span_start, piece
+                        if frag is None:
+                            # Keep 没有/未书面约定… before topic so soft 合法吗 still sees not_also
+                            span_start = tidx
+                            pre = left[:tidx]
+                            for cue in (
+                                "既没有书面约定又",
+                                "没有书面约定",
+                                "未书面约定",
+                                "且没有书面约定",
+                                "且未书面约定",
+                            ):
+                                if pre.endswith(cue):
+                                    span_start = tidx - len(cue)
+                                    break
+                            piece = raw[span_start:end]
+                            if match_judge(piece.rstrip("？?")) is not None:
+                                frag_start, frag = span_start, piece
                 if frag is not None and frag_start >= 0:
+                    # Dual A并且B合法吗: don't peel the right-hand topic only
+                    if dual is not None and frag_start > 0:
+                        start = i + 1
+                        continue
                     cands.append((frag_start, end, frag.strip()))
                 start = i + 1
 
@@ -588,6 +882,82 @@ def evaluate_hit(
     source = of_value(machine, "出处", rule.topic) or ""
     trig = hit.trigger
     inv = hit.invert_polar
+
+    if hit.unknown_prefix:
+        return JudgeOutcome(
+            kind="miss",
+            topic=hit.unknown_prefix,
+            detail="unknown_topic",
+            source=source,
+            trigger=trig,
+            invert_polar=inv,
+        )
+    if hit.not_duration:
+        unit = of_value(machine, "单位", rule.topic) or ""
+        if unit == "月":
+            ask = f"请问{rule.topic}几个月？"
+        elif unit == "天":
+            ask = f"请问{rule.topic}多少天？"
+        elif unit == "年":
+            ask = f"请问{rule.topic}几年？"
+        else:
+            ask = f"请问{rule.topic}多久？"
+        return JudgeOutcome(
+            kind="ask",
+            topic=rule.topic,
+            detail="not_value",
+            ask=ask,
+            source=source,
+            trigger=trig,
+            invert_polar=inv,
+        )
+    if len(hit.alt_durations) >= 2:
+        polar: list[bool] = []
+        last: JudgeOutcome | None = None
+        for dur in hit.alt_durations:
+            sub = evaluate_hit(
+                machine,
+                replace(hit, duration=dur, alt_durations=()),
+                waived_also=waived_also,
+            )
+            last = sub
+            if sub.kind not in {"answer", "explain"}:
+                return sub
+            polar.append(sub.ok)
+        if last is not None and (all(polar) or not any(polar)):
+            return last
+        labels = [_dur_label(d) for d in hit.alt_durations]
+        ask = f"请问{rule.topic}是{'还是'.join(labels)}？"
+        return JudgeOutcome(
+            kind="ask",
+            topic=rule.topic,
+            detail="any_duration",
+            ask=ask,
+            source=source,
+            trigger=trig,
+            invert_polar=inv,
+        )
+
+    # Surface not(also): 未/没有书面约定 — also applies when soft trigger
+    # matched but same topic has a strict rule listing the denied key.
+    also_keys = set(rule.also)
+    if hit.also_denied and not also_keys:
+        for r in load_judge_rules():
+            if r.topic == rule.topic:
+                also_keys.update(r.also)
+    denied_required = [k for k in hit.also_denied if k in also_keys]
+    if denied_required:
+        key = denied_required[0]
+        return JudgeOutcome(
+            kind="answer",
+            topic=rule.topic,
+            ok=False,
+            detail=f"not_also:{key}",
+            source=source,
+            trigger=trig,
+            invert_polar=inv,
+        )
+
     missing = _check_also(machine, rule, waived=waived_also)
     if missing:
         return JudgeOutcome(
@@ -633,10 +1003,19 @@ def evaluate_hit(
                 trigger=trig,
                 invert_polar=inv,
             )
-        ok = hit.enum_value in allowed or any(
-            hit.enum_value == a or a in hit.enum_value or hit.enum_value in a
-            for a in allowed
-        )
+        parts = _enum_parts(hit.enum_value)
+        if parts is not None:
+            ok = all(_enum_member_ok(p, allowed) for p in parts)
+            return JudgeOutcome(
+                kind="answer",
+                topic=rule.topic,
+                ok=ok,
+                detail="any_enum",
+                source=source,
+                trigger=trig,
+                invert_polar=inv,
+            )
+        ok = _enum_member_ok(hit.enum_value, allowed)
         return JudgeOutcome(
             kind="answer",
             topic=rule.topic,
@@ -839,6 +1218,86 @@ def _match_pending_duration_legal(
     return None
 
 
+_ALL_LEGAL = re.compile(r"^(.+)都(合法吗|合规吗|可以吗)$")
+
+
+def _judge_all_topics(
+    machine: MachineWorld,
+    text: str,
+    *,
+    rules: tuple[JudgeRule, ...],
+    waived_also: frozenset[str] | set[str] | None = None,
+) -> JudgeOutcome | None:
+    """浅层 all: A且B都合法吗 → evaluate each clause; conditional counts as ok."""
+    raw = (text or "").strip().rstrip("？?")
+    m = _ALL_LEGAL.match(raw)
+    if m is None:
+        return None
+    left, trig_tail = m.group(1), m.group(2)
+    parts = [p.strip() for p in re.split(r"并且|且", left) if p.strip()]
+    if len(parts) < 2:
+        return None
+    outcomes: list[JudgeOutcome] = []
+    for part in parts:
+        frag = part + trig_tail
+        h = match_judge(frag, rules=rules)
+        if h is None:
+            return None
+        out = evaluate_hit(machine, h, waived_also=waived_also)
+        if out.kind not in {"answer", "explain"}:
+            return None
+        outcomes.append(out)
+    ok = all(o.ok for o in outcomes)
+    topics = "+".join(o.topic for o in outcomes)
+    sources = "；".join(dict.fromkeys(o.source for o in outcomes if o.source))
+    conds = "；".join(o.conditions for o in outcomes if o.conditions)
+    return JudgeOutcome(
+        kind="answer",
+        topic=topics,
+        ok=ok,
+        detail="all_topics",
+        source=sources,
+        trigger=trig_tail,
+        conditions=conds,
+    )
+
+
+def _judge_and_clauses(
+    machine: MachineWorld,
+    text: str,
+    *,
+    rules: tuple[JudgeRule, ...],
+    waived_also: frozenset[str] | set[str] | None = None,
+) -> JudgeOutcome | None:
+    """浅层 all without 都: A并且B合法吗."""
+    pair = _and_clause_pair(text, rules)
+    if pair is None:
+        return None
+    left, right, trig = pair
+    outcomes: list[JudgeOutcome] = []
+    for part in (left, right):
+        h = match_judge(part + trig, rules=rules)
+        if h is None:
+            return None
+        out = evaluate_hit(machine, h, waived_also=waived_also)
+        if out.kind not in {"answer", "explain"}:
+            return None
+        outcomes.append(out)
+    ok = all(o.ok for o in outcomes)
+    topics = "+".join(o.topic for o in outcomes)
+    sources = "；".join(dict.fromkeys(o.source for o in outcomes if o.source))
+    conds = "；".join(o.conditions for o in outcomes if o.conditions)
+    return JudgeOutcome(
+        kind="answer",
+        topic=topics,
+        ok=ok,
+        detail="all_topics",
+        source=sources,
+        trigger=trig,
+        conditions=conds,
+    )
+
+
 def judge(
     machine: MachineWorld,
     text: str,
@@ -862,6 +1321,18 @@ def judge(
             return evaluate_hit(
                 machine, hit, waived_also=set(hit.rule.also) | set(waived_also or ())
             )
+
+    all_out = _judge_all_topics(
+        machine, text, rules=rules, waived_also=waived_also
+    )
+    if all_out is not None:
+        return all_out
+
+    and_out = _judge_and_clauses(
+        machine, text, rules=rules, waived_also=waived_also
+    )
+    if and_out is not None:
+        return and_out
 
     hit = match_judge(text, rules=rules)
     if hit is not None:

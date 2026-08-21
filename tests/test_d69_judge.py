@@ -313,3 +313,123 @@ def test_compile_extract_试用期_max():
 def test_compile_scan_user_docs():
     clear_judge_cache()
     assert "试用期" in {h.topic for h in scan_user_docs()}
+
+
+def test_repair_keeps_合不合法():
+    from para.repair import repair
+
+    known = {"试用期"}
+    assert "合不合法" in repair("试用期六个月合不合法", set(), known)
+
+
+def test_合不合法_routes_d69():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期六个月合不合法")
+    assert got.rule == "D69"
+    assert _yesish(got.spoken)
+
+
+def test_enum_or_两种合同类型():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "固定期限或无固定期限合同类型合法吗")
+    assert got.rule == "D69"
+    assert _yesish(got.spoken)
+
+
+def test_未书面约定_严格合法_no():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期六个月且未书面约定严格合法吗")
+    assert got.rule == "D69"
+    assert _noish(got.spoken)
+    assert "不合法" in got.spoken or "不是" in got.spoken
+
+
+def test_都合法吗_竞业且试用期():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "竞业限制二年且试用期六个月都合法吗")
+    assert got.rule == "D69"
+    assert "都合法" in got.spoken
+
+
+def test_p2_没有书面约定_prefix_soft_合法吗():
+    """Prefix 没有书面约定 on soft 合法吗 → not_also (same topic has strict also)."""
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "没有书面约定试用期六个月合法吗")
+    assert got.rule == "D69"
+    assert _noish(got.spoken)
+
+
+def test_p2_劳务派遣_miss_not_试用期():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "劳务派遣试用期三个月合法吗")
+    assert got.rule == "REN2"
+    assert "不知道" in got.spoken
+
+
+def test_p2_duration_or_mixed_asks():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期六个月或者七个月合法吗")
+    assert got.rule == "D69.ask"
+    assert "请问" in got.spoken
+    assert "六个月" in got.spoken and "七个月" in got.spoken
+
+
+def test_p2_not_duration_asks():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期不是六个月合法吗")
+    assert got.rule == "D69.ask"
+    assert "请问" in got.spoken
+
+
+def test_p2_tier_or_mixed_asks():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "合同一年试用期二个月或三个月合法吗")
+    assert got.rule == "D69.ask"
+    assert "请问" in got.spoken
+
+
+def test_p2_并且_two_topics():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "试用期六个月并且竞业限制二年合法吗")
+    assert got.rule == "D69"
+    assert "都合法" in got.spoken
+
+
+def test_p2_既没有书面约定又七个月严格():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    got = turn(w, s, "既没有书面约定又试用期七个月严格合法吗")
+    assert got.rule == "D69"
+    assert _noish(got.spoken)

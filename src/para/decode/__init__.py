@@ -1175,6 +1175,13 @@ def _d69_spoken(hit, ask_for_tone: str, text: str) -> str:
     """Compose D69 spoken: conditional/explain narrative, else polar."""
     from para.judge import parse_duration
 
+    if getattr(hit, "detail", "") == "all_topics":
+        spoken = "都合法" if hit.ok else "不都合法"
+        cond = (hit.conditions or "").strip()
+        if hit.ok and cond:
+            spoken = f"{spoken}。相关规定：{cond}"
+        return spoken
+
     cond = (hit.conditions or "").strip()
     want_cond = (
         hit.kind == "explain"

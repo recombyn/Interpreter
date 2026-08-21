@@ -17,6 +17,7 @@ runtime/*.tm
 runtime/qa*_report.json
 runtime/qa*_report.md
 knowledge/user/**/labor_law_eval_report.json
+**/d69_100_report.json
 
 # 设计草稿不进仓库（聊天贴表 / 临时笔记）
 knowledge/**/*.txt

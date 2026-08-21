@@ -1,0 +1,828 @@
+{
+  "version": 1,
+  "count": 100,
+  "cases": [
+    {
+      "id": "d69_001",
+      "category": "tier_binary",
+      "input": "合同二个月试用期零个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=0.0 trial=0"
+    },
+    {
+      "id": "d69_002",
+      "category": "tier_binary",
+      "input": "合同二个月试用期半个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=0.0 trial=0.5"
+    },
+    {
+      "id": "d69_003",
+      "category": "tier_binary",
+      "input": "合同二个月试用期一个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=0.0 trial=1"
+    },
+    {
+      "id": "d69_004",
+      "category": "tier_binary",
+      "input": "合同二个月试用期二个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=0.0 trial=2"
+    },
+    {
+      "id": "d69_005",
+      "category": "tier_binary",
+      "input": "合同三个月试用期半个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=0.5"
+    },
+    {
+      "id": "d69_006",
+      "category": "tier_binary",
+      "input": "合同三个月试用期一个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=1"
+    },
+    {
+      "id": "d69_007",
+      "category": "tier_binary",
+      "input": "合同三个月试用期二个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=2"
+    },
+    {
+      "id": "d69_008",
+      "category": "tier_binary",
+      "input": "合同六个月试用期一个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=1"
+    },
+    {
+      "id": "d69_009",
+      "category": "tier_binary",
+      "input": "合同六个月试用期二个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=2"
+    },
+    {
+      "id": "d69_010",
+      "category": "tier_binary",
+      "input": "合同六个月试用期三个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=3"
+    },
+    {
+      "id": "d69_011",
+      "category": "tier_binary",
+      "input": "合同一年试用期一个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=1"
+    },
+    {
+      "id": "d69_012",
+      "category": "tier_binary",
+      "input": "合同一年试用期二个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=2"
+    },
+    {
+      "id": "d69_013",
+      "category": "tier_binary",
+      "input": "合同一年试用期三个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=3"
+    },
+    {
+      "id": "d69_014",
+      "category": "tier_binary",
+      "input": "合同一年试用期六个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=6"
+    },
+    {
+      "id": "d69_015",
+      "category": "tier_binary",
+      "input": "合同二年试用期半个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=0.5"
+    },
+    {
+      "id": "d69_016",
+      "category": "tier_binary",
+      "input": "合同二年试用期二个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=2"
+    },
+    {
+      "id": "d69_017",
+      "category": "tier_binary",
+      "input": "合同二年试用期三个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=3"
+    },
+    {
+      "id": "d69_018",
+      "category": "tier_binary",
+      "input": "合同二年试用期七个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=7"
+    },
+    {
+      "id": "d69_019",
+      "category": "tier_binary",
+      "input": "合同三年试用期三个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=3"
+    },
+    {
+      "id": "d69_020",
+      "category": "tier_binary",
+      "input": "合同三年试用期六个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=6"
+    },
+    {
+      "id": "d69_021",
+      "category": "tier_binary",
+      "input": "合同三年试用期七个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=7"
+    },
+    {
+      "id": "d69_022",
+      "category": "tier_binary",
+      "input": "合同五年试用期半个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=0.5"
+    },
+    {
+      "id": "d69_023",
+      "category": "tier_binary",
+      "input": "合同五年试用期二个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=2"
+    },
+    {
+      "id": "d69_024",
+      "category": "tier_binary",
+      "input": "合同五年试用期六个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=6"
+    },
+    {
+      "id": "d69_025",
+      "category": "tier_binary",
+      "input": "合同五年试用期七个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=7"
+    },
+    {
+      "id": "d69_026",
+      "category": "tier_binary",
+      "input": "试用期二个月合同一年合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=2.0 trial=2"
+    },
+    {
+      "id": "d69_027",
+      "category": "tier_binary",
+      "input": "试用期六个月合同三年合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=6.0 trial=6"
+    },
+    {
+      "id": "d69_028",
+      "category": "tier_binary",
+      "input": "试用期一个月合同六个月合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "tier max=1.0 trial=1"
+    },
+    {
+      "id": "d69_029",
+      "category": "conditional",
+      "input": "试用期半个月合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_030",
+      "category": "conditional",
+      "input": "试用期一个月合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_031",
+      "category": "conditional",
+      "input": "试用期二个月合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_032",
+      "category": "conditional",
+      "input": "试用期三个月合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_033",
+      "category": "conditional",
+      "input": "试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_034",
+      "category": "conditional",
+      "input": "试用期七个月合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_035",
+      "category": "conditional",
+      "input": "试用期八个月合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_036",
+      "category": "conditional",
+      "input": "什么情况下试用期六个月不违法",
+      "expected": [
+        "情况下合法",
+        "不得超过"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_037",
+      "category": "conditional",
+      "input": "什么情况下试用期一个月合法",
+      "expected": [
+        "情况下",
+        "不得超过"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_038",
+      "category": "conditional",
+      "input": "试用期六个月合法吗",
+      "expected": "不得超过",
+      "match": "contains"
+    },
+    {
+      "id": "d69_039",
+      "category": "conditional",
+      "input": "试用期零个月合法吗",
+      "expected": [
+        "合法",
+        "情况下"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_040",
+      "category": "conditional",
+      "input": "试用期一个半月合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_041",
+      "category": "trigger_variants",
+      "input": "试用期六个月合不合法",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_042",
+      "category": "trigger_variants",
+      "input": "试用期六个月合规吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_043",
+      "category": "trigger_variants",
+      "input": "试用期六个月可以吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_044",
+      "category": "trigger_variants",
+      "input": "试用期六个月不违法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_045",
+      "category": "trigger_variants",
+      "input": "试用期六个月违法吗",
+      "expected": "不违法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_046",
+      "category": "trigger_variants",
+      "input": "试用期六个月不违法",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_047",
+      "category": "trigger_variants",
+      "input": "试用期七个月合不合法",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_048",
+      "category": "trigger_variants",
+      "input": "试用期七个月合规吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_049",
+      "category": "trigger_variants",
+      "input": "试用期七个月可以吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_050",
+      "category": "trigger_variants",
+      "input": "真的试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_051",
+      "category": "trigger_variants",
+      "input": "到底试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_052",
+      "category": "trigger_variants",
+      "input": "请问试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_053",
+      "category": "jingye",
+      "input": "竞业限制一年合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_054",
+      "category": "jingye",
+      "input": "竞业限制二年合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_055",
+      "category": "jingye",
+      "input": "竞业限制两年合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_056",
+      "category": "jingye",
+      "input": "竞业限制三年合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_057",
+      "category": "jingye",
+      "input": "竞业限制半年合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_058",
+      "category": "jingye",
+      "input": "竞业限制三年合规吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_059",
+      "category": "jingye",
+      "input": "竞业限制二年可以吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_060",
+      "category": "jingye",
+      "input": "竞业限制四年合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_061",
+      "category": "enum",
+      "input": "合同类型固定期限合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_062",
+      "category": "enum",
+      "input": "合同类型无固定期限合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_063",
+      "category": "enum",
+      "input": "合同类型以完成一定工作任务为期限合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_064",
+      "category": "enum",
+      "input": "合同类型口头协议合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_065",
+      "category": "enum",
+      "input": "合同类型临时工合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_066",
+      "category": "enum",
+      "input": "合同类型固定期限合规吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_067",
+      "category": "conjunction",
+      "input": "试用期六个月严格合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_068",
+      "category": "conjunction",
+      "input": "试用期一个月严格合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_069",
+      "category": "conjunction",
+      "input": "合同三年试用期六个月严格合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_070",
+      "category": "conjunction",
+      "input": "合同一年试用期二个月严格合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_071",
+      "category": "conjunction",
+      "input": "合同一年试用期三个月严格合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_072",
+      "category": "conjunction",
+      "input": "试用期七个月严格合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_073",
+      "category": "conjunction",
+      "input": "试用期六个月严格合法吗",
+      "expected": "不得超过",
+      "match": "contains"
+    },
+    {
+      "id": "d69_074",
+      "category": "conjunction",
+      "input": "合同五年试用期六个月严格合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_075",
+      "category": "multi_long",
+      "input": "试用期六个月合法吗竞业限制二年合法吗",
+      "expected": [
+        "情况下合法",
+        "竞业限制二年合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_076",
+      "category": "multi_long",
+      "input": "竞业限制二年合法吗试用期六个月合法吗",
+      "expected": [
+        "竞业限制二年合法",
+        "情况下合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_077",
+      "category": "multi_long",
+      "input": "试用期七个月合法吗竞业限制三年合法吗",
+      "expected": [
+        "不合法",
+        "不合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_078",
+      "category": "multi_long",
+      "input": "合同类型固定期限合法吗试用期六个月合法吗",
+      "expected": [
+        "合法",
+        "情况下合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_079",
+      "category": "multi_long",
+      "input": "本人已阅读材料并知悉应当依法订立劳动合同。试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_080",
+      "category": "multi_long",
+      "input": "本人已阅读材料并知悉应当依法订立劳动合同。竞业限制二年合法吗",
+      "expected": "合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_081",
+      "category": "multi_long",
+      "input": "另外试用期六个月合法吗",
+      "expected": "情况下合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_082",
+      "category": "multi_long",
+      "input": "另外竞业限制三年合法吗",
+      "expected": "不合法",
+      "match": "contains"
+    },
+    {
+      "id": "d69_083",
+      "category": "multi_long",
+      "input": "试用期六个月合法吗另外竞业限制二年合法吗",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_084",
+      "category": "multi_long",
+      "input": "本人已阅读材料并知悉应当依法订立劳动合同。试用期六个月合法吗竞业限制二年合法吗",
+      "expected": [
+        "情况下合法",
+        "竞业限制二年合法"
+      ],
+      "match": "contains"
+    },
+    {
+      "id": "d69_085",
+      "category": "ask_resume",
+      "input": "六个月",
+      "expected": "情况下合法",
+      "match": "contains",
+      "turns": [
+        "试用期合法吗",
+        "六个月"
+      ],
+      "note": "ask then duration"
+    },
+    {
+      "id": "d69_086",
+      "category": "ask_resume",
+      "input": "六个月不违法",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains",
+      "turns": [
+        "试用期合法吗",
+        "六个月不违法"
+      ],
+      "note": "bare duration + polarity after pin"
+    },
+    {
+      "id": "d69_087",
+      "category": "ask_resume",
+      "input": "七个月",
+      "expected": "不合法",
+      "match": "contains",
+      "turns": [
+        "试用期合法吗",
+        "七个月"
+      ],
+      "note": "ask then over-limit"
+    },
+    {
+      "id": "d69_088",
+      "category": "ask_resume",
+      "input": "二年",
+      "expected": "合法",
+      "match": "contains",
+      "turns": [
+        "竞业限制合法吗",
+        "二年"
+      ],
+      "note": "jingye ask resume"
+    },
+    {
+      "id": "d69_089",
+      "category": "ask_resume",
+      "input": "三年",
+      "expected": "不合法",
+      "match": "contains",
+      "turns": [
+        "竞业限制合法吗",
+        "三年"
+      ],
+      "note": "jingye ask over"
+    },
+    {
+      "id": "d69_090",
+      "category": "ask_resume",
+      "input": "半个月",
+      "expected": [
+        "情况下合法",
+        "合法"
+      ],
+      "match": "contains",
+      "turns": [
+        "试用期合法吗",
+        "半个月"
+      ],
+      "note": "half-month resume"
+    },
+    {
+      "id": "d69_091",
+      "category": "p2_topic",
+      "input": "劳务派遣试用期三个月合法吗",
+      "expected": "不知道",
+      "match": "contains",
+      "note": "no 劳务派遣 rule — miss/REN2"
+    },
+    {
+      "id": "d69_092",
+      "category": "p2_or_dur",
+      "input": "试用期六个月或者七个月合法吗",
+      "expected": "请问",
+      "match": "contains",
+      "note": "or of durations — mixed → ask"
+    },
+    {
+      "id": "d69_093",
+      "category": "p2_and",
+      "input": "试用期六个月并且竞业限制二年合法吗",
+      "expected": "都合法",
+      "match": "contains",
+      "note": "conjunction of two judges without 都"
+    },
+    {
+      "id": "d69_094",
+      "category": "p2_not_value",
+      "input": "试用期不是六个月合法吗",
+      "expected": "请问",
+      "match": "contains",
+      "note": "negated duration → ask"
+    },
+    {
+      "id": "d69_095",
+      "category": "p2_tier_or",
+      "input": "合同一年试用期二个月或三个月合法吗",
+      "expected": "请问",
+      "match": "contains",
+      "note": "or under tier — mixed → ask"
+    },
+    {
+      "id": "d69_096",
+      "category": "p2_not_also",
+      "input": "既没有书面约定又试用期七个月严格合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "not + over-limit + strict"
+    },
+    {
+      "id": "d69_097",
+      "category": "p2_not_also",
+      "input": "试用期六个月且未书面约定严格合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "not+also on strict conjunction"
+    },
+    {
+      "id": "d69_098",
+      "category": "p2_not_also",
+      "input": "没有书面约定试用期六个月合法吗",
+      "expected": "不合法",
+      "match": "contains",
+      "note": "prefix 没有书面约定 on soft 合法吗"
+    },
+    {
+      "id": "d69_099",
+      "category": "p2_enum_or",
+      "input": "固定期限或无固定期限合同类型合法吗",
+      "expected": "合法",
+      "match": "contains",
+      "note": "or of enum values"
+    },
+    {
+      "id": "d69_100",
+      "category": "p2_all",
+      "input": "竞业限制二年且试用期六个月都合法吗",
+      "expected": "都合法",
+      "match": "contains",
+      "note": "all of two topics"
+    }
+  ]
+}
