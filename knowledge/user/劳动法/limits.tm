@@ -1,4 +1,4 @@
-# 由 python -m cni.tools.compile_limits --write 生成（可手工改）
+# 由 python -m para.tools.compile_limits --write 生成（可手工改）
 # 多档上限取最大；多档下限取最小。出处 → of(出处, 主题, {stem}第N行)
 
 ! 2 : e

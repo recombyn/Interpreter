@@ -1,4 +1,4 @@
-"""Gap / out-of-scope stress: ≥100 prompts that Interpreter likely cannot implement correctly.
+"""Gap / out-of-scope stress: ≥100 prompts that Para likely cannot implement correctly.
 
 Goal: probe known boundaries — open calc, untaught topics, fuzzy units, why/how advice,
 summarize/compare, no-pin deixis, poetry, nested syntax — and classify outcomes:
@@ -11,14 +11,14 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from cni.judge import clear_judge_cache
-from cni.kernel import boot
-from cni.knowledge.text_doc import load_user_memories
-from cni.preprocess import load_user_dict
-from cni.route import turn
-from cni.session import Session
-from cni.system_tm import clear_system_cache
-from cni.user_config import clear_user_config_cache
+from para.judge import clear_judge_cache
+from para.kernel import boot
+from para.knowledge.text_doc import load_user_memories
+from para.preprocess import load_user_dict
+from para.route import turn
+from para.session import Session
+from para.system_tm import clear_tm_caches
+from para.user_config import clear_user_config_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_JSON = ROOT / "runtime" / "qa_gap100_report.json"
@@ -243,7 +243,7 @@ def classify(rule: str, spoken: str) -> str:
 
 
 def main() -> None:
-    clear_system_cache()
+    clear_tm_caches()
     clear_judge_cache()
     clear_user_config_cache()
     load_user_dict.cache_clear()

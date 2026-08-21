@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from cni.decode import _clause_split, decode
-from cni.kernel import boot
-from cni.route import hear, turn
-from cni.session import Session
-from cni.user_config import clear_user_config_cache
+from para.decode import _clause_split, decode
+from para.kernel import boot
+from para.route import hear, turn
+from para.session import Session
+from para.user_config import clear_user_config_cache
 
 
 def test_yihe_because_split():
@@ -42,9 +42,9 @@ def test_resolve_ana_prefers_patient():
 
 def test_ambig_clarify_mode(monkeypatch):
     clear_user_config_cache()
-    monkeypatch.setattr("cni.user_config.ambig_mode", lambda path=None: "clarify")
+    monkeypatch.setattr("para.user_config.ambig_mode", lambda path=None: "clarify")
     w, s = boot(), Session()
-    from cni.route import route
+    from para.route import route
 
     # Short polar stays single-bucket; clarify mode must not break yes/no.
     route(w, s, "教电脑是机器")
@@ -57,7 +57,7 @@ def test_ambig_clarify_mode(monkeypatch):
 def test_ambig_clarify_multi_bucket(monkeypatch):
     """AMB1: long comma sentence with clarify mode returns ambiguity prompt."""
     clear_user_config_cache()
-    monkeypatch.setattr("cni.user_config.ambig_mode", lambda path=None: "clarify")
+    monkeypatch.setattr("para.user_config.ambig_mode", lambda path=None: "clarify")
     w, s = boot(), Session()
     hear(w, s, "小明打小红")
     got = turn(w, s, "小明打小红，我不去吗")

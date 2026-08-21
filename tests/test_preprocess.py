@@ -1,15 +1,15 @@
 from datetime import date
 
-from cni.kernel import boot, parse_msg
-from cni.preprocess import (
+from para.kernel import boot, parse_msg
+from para.preprocess import (
     apply_f_order,
     apply_g,
     apply_user_dict,
     load_user_dict,
     preprocess,
 )
-from cni.route import hear, turn
-from cni.session import Session
+from para.route import hear, turn
+from para.session import Session
 
 
 def test_g_quantity_and_dates():
@@ -39,7 +39,7 @@ def test_f41_50_order_only_hardcoded():
     assert "有没有" in apply_f_order("有冇电脑")
     assert "正在吃饭" in apply_f_order("紧食饭")
     # F1–40 not hard-coded: without dict, yyds stays as-is
-    from cni.preprocess import apply_f_order as fo
+    from para.preprocess import apply_f_order as fo
 
     assert fo("yyds") == "yyds"
 
@@ -98,17 +98,17 @@ def test_i_hardcoded_intercepts():
 
 def test_no_system_english_lex():
     """System does not load English lex; without dict, pure English does not take greet decode."""
-    from cni.decode.lex import pick_lex
+    from para.decode.lex import pick_lex
     from pathlib import Path
-    from cni.paths import WORLD_DIR
+    from para.paths import WORLD_DIR
 
     assert pick_lex("hello").name == "ch"
     assert not (WORLD_DIR / "lex.en.tm").is_file()
     w = boot()
     s = Session()
     # Temp: without hello mapping, pure-English open name must not tag greet
-    from cni.decode import decode
-    from cni.preprocess import apply_user_dict
+    from para.decode import decode
+    from para.preprocess import apply_user_dict
 
     # Decode English directly (bypass user_dict) → non-greet system path
     got = decode(w, s, "hello", write=False)

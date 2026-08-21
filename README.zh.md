@@ -1,6 +1,6 @@
-<div align="center">
+﻿<div align="center">
 
-# Interpreter
+# Para
 
 <p>
   <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/English-d9d9d9"></a>
@@ -9,163 +9,81 @@
 
 </div>
 
-> 人话 → 符号规则引擎 → 世界事实。**无大模型，无正则黑盒。**
+> **可插拔的汉语解码器**：精确理解中文，零幻觉；知识完全由用户掌控。
 
-## 这是什么
+## 产品契约
 
-Interpreter 是一个**纯符号推理的中文语言理解引擎**。
+| 承诺 | 含义 |
+| --- | --- |
+| **In-scope 忠实** | 已覆盖句式 + 已教知识 → 确定、可复现 |
+| **Out-of-scope 拒绝** | 未教过的世界知识 → 明确不知道，**绝不编造** |
+| **知识外置** | 语法在引擎；事实在 `knowledge/user/`（或你注入的目录） |
+| **可审计** | 每次理解带回 `rule`；可选 `facts_added` |
 
-你用自然语言“教”它知识，它用同样的自然语言回答你的问题——背后没有任何神经网络，只有一套可读、可审计、可扩展的符号规则。
+不是开放域聊天模型；覆盖靠规则扩展，不靠猜测。
 
-```
-用户说："电脑是机器"
-→ 引擎记录：isa(电脑, 机器)
+## 插到任意系统
 
-用户问："电脑是什么"
-→ 引擎查询并回答："电脑是机器"
-```
+```python
+from para import Para
 
-## 为什么开发它
+# user_dir = 你的知识目录（词典 / 文档 / 记忆）
+eng = Para(load_user_docs=False, user_dir="./my_knowledge")
 
-**问题**
+# 写：教事实
+w = eng.decode("教电脑是机器", write=True)
+# w.status == "write"
+# w.facts_added → [{"pred":"isa","args":["电脑","机器"]}, ...]
 
-| 方案               | 问题                |
-| ----------------- | ------------------ |
-| 正则 / 关键词匹配       | 覆盖窄，维护成本随输入变体爆炸增长 |
-| 传统 NLP（分词+词性+依存） | 工具链重，泛化脆，改不了规则    |
-| 大语言模型（LLM）       | 幻觉、黑盒、成本高、无法精准审计  |
+# 读：查事实
+q = eng.decode("电脑是什么", write=False)
+# q.status == "query", q.spoken == "电脑是机器", q.rule == "D3.echo"
 
-**目标**
-
-Interpreter 的设计目标是：**可控、可解释、可扩展、零幻觉**。
-
-- 你教进去什么，它只知道什么——不猜、不编造
-- 所有推理路径可追溯（`--trace` 开关）
-- 语法规则是代码，知识是文件，两者分离
-- 在资源受限或隐私敏感的场景下可独立运行
-
-## 与其他方案对比
-
-| 能力                               | 正则   | 传统 NLP           | 大模型（LLM） | Interpreter        |
-| ---------------------------------- | ------ | ------------------ | ------------- | ------------------ |
-| 理解自然语言结构                   | ✗      | △（依赖语料训练）  | ✓             | ✓（符号规则）      |
-| 结果可审计                         | ✓      | △                  | ✗（黑盒）     | ✓（每步可追踪）    |
-| 零幻觉                             | ✓      | △                  | ✗             | ✓                  |
-| 支持多种句式（把/被/疑问/复句…）   | ✗      | △                  | ✓             | ✓（65条 D 规则）   |
-| 纠错（错别字/同音字）              | ✗      | △                  | ✓             | ✓（E 系列）        |
-| 方言/口语输入                      | ✗      | ✗                  | ✓             | ✓（F/G 系列）      |
-| 无需互联网 / 无 API 费用           | ✓      | ✓                  | ✗             | ✓                  |
-| 用户可扩展词典                     | ✗      | △                  | ✗             | ✓（`user_dict.tm`） |
-| 知识边界清晰                       | ✓      | △                  | ✗             | ✓                  |
-
-## 设计原理
-
-**流水线**
-
-```
-输入
- │
- ▼
-E（纠错）→ user_dict（用户词典）→ F41–50（语序规整）→ G（数量/时间归一）→ I（社交拦截）
- │                                                                        │
- │（未拦截）                                                              │（命中→直接回复）
- ▼
-D（句法解码：65条规则）
- │
- ▼
-内核（RO 路由 / WC 一致性 / QP 查询 / MEM 记忆 / REN 渲染）
- │
- ▼
-输出（自然语言）
+# 未知：拒绝
+u = eng.decode("火星上有独角兽吗")
+# u.miss == True 或 status == "refuse" —— 不会捏造答案
 ```
 
-**知识形态（落盘谓词）**
+主机只消费 `DecodeOutcome`（或 `.to_dict()`）：自己渲染 UI、自己持久化。  
+**有理有据**：检索到的相关知识在独立字段 `evidence`（`ref` + `text`），与话术 `spoken` 分开。
 
-```
-isa(电脑, 机器)              # 类属
-located(电脑, 桌上)          # 位置
-has(我, 电脑)                # 领属
-of(kind, e.1, 发明)          # 事件角色
-of(content, 静夜思, 床前明月光) # 内容
-```
+便捷封装仍可用：`teach()` / `reply()` / `interpret()`。
 
-**规则分层**
+## 案例：劳动法
 
-| 层          | 内容                  | 条数   | 谁维护            |
-| ----------- | -------------------- | ----- | --------------- |
-| **表1（内核）** | 句法/纠错/语序/时间/社交等核心算法 | 110条 | 引擎内核           |
-| **表2（用户）** | 缩写、方言词、中英混写、表情映射等   | 54条  | `user_dict.tm` |
+完整用户知识包（概念图 + 法条行索引 + D69 阈值）：
 
-表1 是算法；表2 是词典映射。
+- 说明：[examples/labor_law/README.md](examples/labor_law/README.md)
+- 演示：`PYTHONPATH=src python examples/labor_law/demo.py`
+- 评测：`PYTHONPATH=src python -m para.tools.eval_labor_law`
 
-## 能干什么
-
-- **教知识**：用自然语言输入事实，引擎解析并持久化
-- **问知识**：用自然语言提问，引擎查询已有事实并回答
-- **处理复杂句式**：把字句、被字句、因果/转折/条件复句、疑问句等
-- **容错输入**：自动纠正错别字、同音字、多余字符
-- **口语兼容**：支持粤语语序、模糊数量、相对日期
-- **记忆追踪**：维护对话焦点栈，正确处理代词指代
-- **推理链**：支持 `isa` 继承链追溯（深度 ≤ 2 层）
-
-## 快速开始
-
-Python 包与命令行入口仍为 `cni`（`python -m cni …`）。
+## 安装
 
 ```bash
 pip install -e ".[dev]"
-
-# 写入知识
-python -m cni teach "电脑是机器"
-python -m cni teach "静夜思的内容是床前明月光"
-
-# 查询
-python -m cni reply "电脑是什么"
-python -m cni reply "静夜思的内容是什么"
-
-# 交互模式
-python -m cni repl
-
-# 调试（显示推理链）
-python -m cni reply "电脑是什么" --trace
-
-# 运行测试
-python -m pytest
+python -m para teach "电脑是机器"
+python -m para reply "电脑是什么"
+python -m para decode "电脑是什么"
+python -m para reply "电脑是什么" --trace
 ```
 
-在 `repl` 中，以 `教|记住|学习|记` 开头自动触发写库，其余为只读查询。
-
-## 自定义词典
-
-编辑 `knowledge/user/user_dict.tm`，格式：
+## 目录
 
 ```
-map yyds 永远的神
-map check 检查
-map 偶 我
-```
-
-## 目录结构
-
-```
-src/cni/
-  data/world/  # 引擎自带世界数据（lang/base/lex/form/rules）
-knowledge/
-  user/        # 用户词典（表2）
-docs/
-  规则全表.md / rules.en.md
-  指南.md / guide.en.md
+src/para/           # 解码算法（无领域知识）
+knowledge/user/            # 用户知识与话术
+knowledge/user/劳动法/     # 劳动法案例包
+examples/labor_law/        # 主机接入演示
+docs/                      # 规则与指南
 ```
 
 ## 设计边界
 
-- 未教过的事实**一律不猜**，返回“我不了解这个信息”
-- 不做开放域闲聊（非学习路径不写库）
-- 不做诗词赏析（I11 拦截）
-- `isa` 链推理深度上限 2 层，不做全图遍历
+- 无大模型；未教过的不猜
+- 写库失败不降级闲聊（RO3）
+- `isa` 推理深度默认 ≤ 2
 
 ## 文档
 
-- **规则逐条明细**：[docs/规则全表.md](docs/规则全表.md)
-- **架构与使用指南**：[docs/指南.md](docs/指南.md)（含 **用户层 tm 语法**：`!` / `+`、劳动法拆分文件、D69 `rules`/`limits`）
-- **English**：[README.md](README.md) · [docs/guide.en.md](docs/guide.en.md) · [docs/rules.en.md](docs/rules.en.md)
+- [docs/指南.md](docs/指南.md) · [docs/规则全表.md](docs/规则全表.md)
+- English: [README.md](README.md) · [docs/guide.en.md](docs/guide.en.md)

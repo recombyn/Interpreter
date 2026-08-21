@@ -1,0 +1,183 @@
+{
+  "memory_query": [
+    {"name": "isa_employee", "input": "员工是什么", "expected": "员工是人"},
+    {"name": "isa_company", "input": "公司是什么", "expected": "公司是组织"},
+    {"name": "isa_contract", "input": "劳动合同是什么", "expected": "劳动合同是合同"},
+    {"name": "isa_overtime", "input": "加班是什么", "expected": "加班是工作"},
+    {"name": "isa_wage", "input": "最低工资是什么", "expected": "最低工资是工资"},
+    {"name": "isa_hours", "input": "法定工时是什么", "expected": "法定工时是八小时"},
+    {"name": "has_yes", "input": "公司有员工吗", "expected": "是的"},
+    {"name": "content_labor", "input": "劳动法的内容是什么", "expected": "保护劳动者的合法权益"},
+    {"name": "content_contract_law", "input": "劳动合同法的内容是什么", "expected": "规范劳动合同的订立履行"}
+  ],
+  "teach_roundtrip": [
+    {
+      "name": "teach_isa",
+      "teach": "教兼职是工作",
+      "write_expected": "兼职是工作",
+      "ask": "兼职是什么",
+      "ask_expected": "兼职是工作"
+    },
+    {
+      "name": "teach_has",
+      "teach": "教员工有社保",
+      "write_expected": "员工有社会保险",
+      "ask": "员工有社保吗",
+      "ask_expected": "是的"
+    },
+    {
+      "name": "teach_content",
+      "teach": "教规章的内容是不得违法解除",
+      "write_expected": "规章的内容是不得违法解除",
+      "ask": "规章的内容是什么",
+      "ask_expected": "不得违法解除"
+    }
+  ],
+  "user_dict": [
+    {"name": "dict_overtime", "input": "OT是工作", "expected": "加班是工作"},
+    {"name": "dict_worker", "input": "劳动者是人", "expected": "员工是人"},
+    {"name": "dict_employer", "input": "用人单位是组织", "expected": "公司是组织"},
+    {"name": "dict_en", "input": "laborlaw的内容是保护权益", "expected": "劳动法的内容是保护权益"},
+    {"name": "dict_social", "input": "员工有五险一金", "expected": "员工有社会保险"},
+    {"name": "dict_plus_gap", "input": "N+1是工作", "expected": "N+1是工作"}
+  ],
+  "dict_pipeline": [
+    {
+      "name": "worker_alias_teach",
+      "input": "教劳动者是人",
+      "expected": "员工是人",
+      "note": "user_dict alias before I11"
+    },
+    {
+      "name": "worker_alias_query",
+      "input": "员工是什么",
+      "expected": "员工是人",
+      "note": ""
+    },
+    {
+      "name": "overtime_alias_teach",
+      "input": "教OT是工作",
+      "expected": "加班是工作",
+      "note": ""
+    }
+  ],
+  "judge": [
+    {
+      "name": "probation_six_ok",
+      "input": "试用期六个月合法吗",
+      "expected": "情况下合法",
+      "note": "D69 conditional tiers; not bare abs 上限",
+      "also_expected": ["三年", "不得超过"]
+    },
+    {
+      "name": "probation_six_explain",
+      "input": "什么情况下试用期六个月不违法",
+      "expected": "不得超过",
+      "note": "explain cue + conditions",
+      "also_expected": ["三年"]
+    },
+    {
+      "name": "probation_six_违法吗",
+      "input": "试用期六个月违法吗",
+      "expected": "不违法",
+      "note": "invert polar + conditions",
+      "also_expected": ["不得超过"]
+    },
+    {
+      "name": "probation_seven_no",
+      "input": "试用期七个月合法吗",
+      "expected": "不合法",
+      "note": "over absolute cap in limits.tm"
+    },
+    {
+      "name": "probation_ask_duration",
+      "input": "试用期合法吗",
+      "expected": "D69.ask",
+      "note": "D69.ask for duration",
+      "match": "rule"
+    },
+    {
+      "name": "contract_type_ok",
+      "input": "合同类型固定期限合法吗",
+      "expected": "合法",
+      "note": "enum in 许可"
+    }
+  ],
+  "long_query": [
+    {
+      "name": "long_prefix_probation",
+      "input": "请问一下我们公司约定试用期六个月合法吗",
+      "expected": "情况下合法",
+      "note": "spoken prefix ignored; D69 conditional",
+      "also_expected": ["不得超过"]
+    },
+    {
+      "name": "long_tier_contract_probation",
+      "input": "合同一年试用期二个月合法吗",
+      "expected": "合法",
+      "note": "tier: 12–36 months → probation cap 2; binary OK"
+    },
+    {
+      "name": "long_line_content",
+      "input": "劳动法第84行的内容是什么",
+      "expected": "第十九条",
+      "note": "D67 statute body"
+    }
+  ],
+  "multi_query": [
+    {
+      "name": "multi_two_d69",
+      "input": "试用期六个月合法吗竞业限制二年合法吗",
+      "expected": "；",
+      "note": "two D69 answers joined",
+      "also_expected": ["试用期", "竞业", "合法"]
+    },
+    {
+      "name": "multi_d67_d69",
+      "input": "劳动法第84行的内容是什么试用期六个月合法吗",
+      "expected": "；",
+      "note": "D67 + D69",
+      "also_expected": ["第十九条", "合法"]
+    },
+    {
+      "name": "multi_long_also",
+      "input": "员工入职签一年合同试用期两个月合法吗另外竞业限制两年合法吗",
+      "expected": "；",
+      "note": "narrative + 另外 + two judges",
+      "also_expected": ["合法"]
+    }
+  ],
+  "known_gap": [
+    {
+      "name": "i11_blocks_worker_literal",
+      "kind": "i11",
+      "input": "劳动者是人",
+      "expected": "I11",
+      "note": "I11 without user_dict alias"
+    },
+    {
+      "name": "pin_corrupts_hour",
+      "kind": "repair",
+      "input": "法定工时是八小时",
+      "expected": "八小是",
+      "note": "E2 pin before open name in domain",
+      "match": "contains"
+    },
+    {
+      "name": "empty_world_miss",
+      "kind": "empty_turn",
+      "input": "劳动法的内容是什么",
+      "expected": "我不知道",
+      "note": "no user memory => REN2",
+      "match": "equals"
+    }
+  ],
+  "findings": [
+    "User-layer memory (labor_law.tm) enables isa/has/content Q&A without touching system lex.",
+    "user_dict aliases keep teach path clear of I11; keep aliases in user_dict, not system.tm.",
+    "Character pins can corrupt open names before they exist in domain; seed memory or avoid ambiguous chars on first teach.",
+    "Empty world correctly returns REN2 for labor questions — knowledge is not baked into system layer.",
+    "Latin user_dict keys must match [A-Za-z][A-Za-z0-9]* (e.g. OT); tokens like N+1 are not rewritten.",
+    "Long utterances with spoken prefixes still peel D69/D67 spans; multi-fire joins answers with ；."
+  ]
+}

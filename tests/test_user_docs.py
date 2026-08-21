@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from cni.app import Interpreter
-from cni.knowledge.content_store import ContentStore, default_content_root
-from cni.knowledge.text_doc import parse_user_text, sync_user_text
-from cni.paths import USER_DIR
-from cni.preprocess import apply_doc_query
-from cni.session import Session
+from para.app import Para
+from para.knowledge.content_store import ContentStore, default_content_root
+from para.knowledge.text_doc import parse_user_text, sync_user_text
+from para.paths import USER_DIR
+from para.preprocess import apply_doc_query
+from para.session import Session
 
 
 def test_text_suffixes_supported():
-    from cni.knowledge.text_doc import TEXT_SUFFIXES
+    from para.knowledge.text_doc import TEXT_SUFFIXES
 
     for suf in (".text", ".txt", ".md", ".mk", ".markdown"):
         assert suf in TEXT_SUFFIXES
@@ -51,7 +51,7 @@ def test_sync_and_query_line_d67():
     if not path.is_file():
         return
     sync_user_text(path, force=True)
-    interp = Interpreter(remember=False, load_user_docs=True)
+    interp = Para(remember=False, load_user_docs=True)
     r = interp.reply("第20行的内容是什么")
     assert "完善劳动合同制度" in r
     r3 = interp.reply("第20行有什么")
@@ -63,7 +63,7 @@ def test_mem4_short_ask_reuses_entity_d67():
     if not path.is_file():
         return
     sync_user_text(path, force=True)
-    interp = Interpreter(remember=False, load_user_docs=True)
+    interp = Para(remember=False, load_user_docs=True)
     r1 = interp.interpret("第20行的内容是什么")
     assert r1.rule == "D67"
     assert "完善劳动合同制度" in r1.reply

@@ -73,7 +73,7 @@ map 😢 伤心
 map 🤔 思考
 map 好吧 接受
 
-# --- Labor-law domain (user layer; colloquial → wording in 劳动法.text) ---
+# --- Labor-law domain (user layer; colloquial / statute → labor_law.tm terms) ---
 map laborlaw 劳动法
 map overtime 加班
 map OT 加班
@@ -81,11 +81,11 @@ map 加时 加班
 map 劳保 劳动保护
 map 社保 社会保险
 map 五险一金 社会保险
-map 公司 用人单位
-map 老板 用人单位
-map 员工 劳动者
-map 工人 劳动者
-map 用工单位 用工单位
+map 用人单位 公司
+map 老板 公司
+map 劳动者 员工
+map 工人 员工
+map 用工单位 公司
 map 签合同 订立书面劳动合同
 map 试用 试用期
 map 底薪 最低工资

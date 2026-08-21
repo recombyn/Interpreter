@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cni.decode import effects as fx
-from cni.judge import (
+from para.decode import effects as fx
+from para.judge import (
     clear_judge_cache,
     compare,
     match_judge,
@@ -11,12 +11,12 @@ from cni.judge import (
     parse_cn_int,
     pick_tier_limit,
 )
-from cni.kernel import boot
-from cni.knowledge.text_doc import load_user_memories
-from cni.route import turn
-from cni.session import Session
-from cni.tools.compile_limits import extract_from_text, merge_limits, scan_user_docs
-from cni.user_config import clear_user_config_cache
+from para.kernel import boot
+from para.knowledge.text_doc import load_user_memories
+from para.route import turn
+from para.session import Session
+from para.tools.compile_limits import extract_from_text, merge_limits, scan_user_docs
+from para.user_config import clear_user_config_cache
 
 
 def _yesish(spoken: str) -> bool:
@@ -64,11 +64,38 @@ def test_d69_yes_within_limit_with_cite():
     got = turn(w, s, "试用期六个月合法吗")
     assert got.rule == "D69"
     assert _yesish(got.spoken)
+    # Must attach tier conditions — not bare absolute 上限 yes
+    assert any(x in got.spoken for x in ("三年", "不得超过", "情况", "不满"))
     assert "劳动法第" in got.spoken or "见" in got.spoken
 
 
+def test_d69_conditional_explain_and_违法():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    expl = turn(w, s, "什么情况下试用期六个月不违法")
+    assert expl.rule == "D69"
+    assert any(x in expl.spoken for x in ("三年", "不得超过", "情况"))
+    illegal_q = turn(w, s, "试用期六个月违法吗")
+    assert illegal_q.rule == "D69"
+    assert "不违法" in illegal_q.spoken or "合法" in illegal_q.spoken
+    assert any(x in illegal_q.spoken for x in ("三年", "不得超过", "情况"))
+
+
+def test_d69_bare_duration_with_focus():
+    clear_judge_cache()
+    clear_user_config_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    turn(w, s, "试用期合法吗")  # pin + pending
+    got = turn(w, s, "六个月不违法")
+    assert got.rule == "D69"
+    assert any(x in got.spoken for x in ("三年", "不得超过", "情况", "合法", "不违法"))
+
+
 def test_d69_半个月_合法():
-    """半个月 ≤ 上限6月 → 合法；勿再掉进 D21。"""
+    """半个月 ≤ some tiers → conditional 合法 narrative."""
     clear_judge_cache()
     clear_user_config_cache()
     w, s = boot(), Session()
@@ -80,21 +107,25 @@ def test_d69_半个月_合法():
 
 def test_polar_form_override_是否(tmp_path, monkeypatch):
     """用户 form 可把谓词改成 是/否（short 模式）。"""
-    import cni.render.forms as F
+    import para.render.forms as F
+    from para.paths import set_user_dir
 
     (tmp_path / "form.tm").write_text(
         "out polar.mode short\nout polar.合法.yes 是\nout polar.合法.no 否\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(F, "USER_DIR", tmp_path)
+    set_user_dir(tmp_path)
     F.clear_forms_cache()
-    assert F.polar_spoken("试用期六个月合法吗", True, trigger="合法吗") == "是"
-    assert F.polar_spoken("试用期七个月合法吗", False, trigger="合法吗") == "否"
-    F.clear_forms_cache()
+    try:
+        assert F.polar_spoken("试用期六个月合法吗", True, trigger="合法吗") == "是"
+        assert F.polar_spoken("试用期七个月合法吗", False, trigger="合法吗") == "否"
+    finally:
+        set_user_dir(None)
+        F.clear_forms_cache()
 
 
 def test_polar_clause_human_order():
-    from cni.render.forms import clear_forms_cache, polar_spoken
+    from para.render.forms import clear_forms_cache, polar_spoken
 
     clear_forms_cache()
     assert (
@@ -150,7 +181,8 @@ def test_d69_no_over_limit():
 def test_d69_ren2_without_limit_fact():
     clear_judge_cache()
     w2, s2 = boot(), Session()
-    got = turn(w2, s2, "试用期六个月合法吗")
+    # 竞业限制 has no tiers; without limits.tm abs → REN2
+    got = turn(w2, s2, "竞业限制二年合法吗")
     assert got.rule == "REN2"
 
 
@@ -172,6 +204,7 @@ def test_d69_ask_then_resume():
     got = turn(w, s, "六个月")
     assert got.rule == "D69"
     assert _yesish(got.spoken)
+    assert any(x in got.spoken for x in ("三年", "不得超过", "情况"))
 
 
 def test_d69_enum_合同类型():
@@ -197,6 +230,24 @@ def test_mem4_合法吗_to_judge_ask():
     turn(w, s, "试用期六个月合法吗")
     got = turn(w, s, "合法吗")
     assert got.rule == "D69.ask"
+
+
+def test_mem4_preserves_合规吗_trigger():
+    clear_judge_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    turn(w, s, "试用期六个月合法吗")
+    expanded = s.expand_short_ask("合规吗")
+    assert expanded == "试用期合规吗"
+
+
+def test_mem4_preserves_合规吗_trigger():
+    clear_judge_cache()
+    w, s = boot(), Session()
+    load_user_memories(w)
+    turn(w, s, "试用期六个月合法吗")
+    expanded = s.expand_short_ask("合规吗")
+    assert expanded == "试用期合规吗"
 
 
 def test_tier_pick():

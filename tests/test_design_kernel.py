@@ -1,7 +1,7 @@
-from cni.app import Interpreter
-from cni.kernel import boot, kernel, parse_msg
-from cni.route import hear, turn
-from cni.session import Session
+from para.app import Para
+from para.kernel import boot, kernel, parse_msg
+from para.route import hear, turn
+from para.session import Session
 
 
 def test_kernel_wire_preds():
@@ -169,7 +169,7 @@ def test_mem_reset_clears_pins():
 
 
 def test_reply_teach_prefix():
-    interp = Interpreter(remember=False, load_user_docs=False)
+    interp = Para(remember=False, load_user_docs=False)
     assert "机器" in interp.reply("教电脑是机器")
     assert interp.reply("电脑是什么") == "电脑是机器"
 
@@ -183,7 +183,7 @@ def test_ren2_empty_find():
 
 
 def test_user_dict_blocks_structure_words(tmp_path):
-    from cni.preprocess import apply_user_dict, load_user_dict
+    from para.preprocess import apply_user_dict, load_user_dict
 
     load_user_dict.cache_clear()
     # Malicious mapping must not rewrite the structural copula surface
@@ -220,7 +220,7 @@ def test_dual_focus_event_deixis():
 
 
 def test_route_buckets_query_before_basic():
-    from cni.decode.route_table import classify_buckets, load_route_groups
+    from para.decode.route_table import classify_buckets, load_route_groups
 
     load_route_groups.cache_clear()
     assert load_route_groups()
@@ -230,7 +230,7 @@ def test_route_buckets_query_before_basic():
 
 
 def test_route_special_ba():
-    from cni.decode.route_table import classify_buckets
+    from para.decode.route_table import classify_buckets
 
     b = classify_buckets("人把苹果吃", ["ba", "eat"])
     assert "special" in b
@@ -239,7 +239,7 @@ def test_route_special_ba():
 
 def test_content_side_index_d67():
     """D67 uses entity→content index; drop keeps index in sync."""
-    from cni.kernel.parse import parse_msg
+    from para.kernel.parse import parse_msg
 
     w = boot()
     s = Session()
@@ -252,7 +252,7 @@ def test_content_side_index_d67():
     w.apply(parse_msg("- of(content, 甲, 一)"))
     assert w.contents_of("甲") == ["二"]
     assert turn(w, s, "甲的内容是什么").spoken == "二"
-    from cni.tools.validate_rules import check_pattern_conflicts, load_patterns
+    from para.tools.validate_rules import check_pattern_conflicts, load_patterns
 
     load_patterns.cache_clear()
     assert check_pattern_conflicts() == []
@@ -277,7 +277,7 @@ def test_content_side_index_d67():
 
 
 def test_d66_teaches_prefix_via_route():
-    from cni.route import route
+    from para.route import route
 
     w = boot()
     s = Session()
@@ -289,8 +289,8 @@ def test_d66_teaches_prefix_via_route():
 def test_no_legacy_world_package():
     import importlib.util
 
-    assert importlib.util.find_spec("cni.world") is None
-    assert importlib.util.find_spec("cni.interpreter") is None
+    assert importlib.util.find_spec("para.world") is None
+    assert importlib.util.find_spec("para.bogus") is None
 
 
 def test_d10_bei_agent_between():
@@ -420,7 +420,7 @@ def test_ro2_turn_no_write_on_greet():
 
 
 def test_save_world_has_located(tmp_path):
-    from cni.kernel.machine import save_world
+    from para.kernel.machine import save_world
 
     w = boot()
     s = Session()
@@ -434,7 +434,7 @@ def test_save_world_has_located(tmp_path):
 
 
 def test_ro3_empty_spoken():
-    from cni.route import hear as hear_ro
+    from para.route import hear as hear_ro
 
     w = boot()
     s = Session()
@@ -561,10 +561,9 @@ def test_d33_d34_tag_tone():
 
 
 def test_ren1_missing_pred_template(monkeypatch):
-    import cni.decode as dec
-    from cni.render import forms as forms_mod
+    import para.decode as dec
 
-    monkeypatch.setattr(forms_mod, "form", lambda const: None)
+    monkeypatch.setattr(dec, "form_tm", lambda const: None)
     monkeypatch.setattr(dec, "form_of", lambda const, lex=None: None)
     assert dec._apply_form("say.isa", "电脑", "机器", pred="isa") == "[原始逻辑] isa(电脑,机器)"
 
@@ -580,7 +579,7 @@ def test_d67_multi_content_prefers_explicit():
 
 
 def test_content_save_roundtrip(tmp_path):
-    from cni.kernel.machine import load_msgs, save_world
+    from para.kernel.machine import load_msgs, save_world
 
     w = boot()
     s = Session()
@@ -597,7 +596,7 @@ def test_content_save_roundtrip(tmp_path):
 
 
 def test_g1_chinese_wan():
-    from cni.preprocess import apply_g
+    from para.preprocess import apply_g
 
     assert "30000" in apply_g("三万")
     assert "5000" in apply_g("五千")

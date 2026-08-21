@@ -6,12 +6,12 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from cni.judge import clear_judge_cache
-from cni.kernel import boot
-from cni.knowledge.text_doc import load_user_memories
-from cni.route import hear, turn
-from cni.session import Session
-from cni.user_config import clear_user_config_cache
+from para.judge import clear_judge_cache
+from para.kernel import boot
+from para.knowledge.text_doc import load_user_memories
+from para.route import hear, turn
+from para.session import Session
+from para.user_config import clear_user_config_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_JSON = ROOT / "runtime" / "qa300_report.json"
@@ -221,7 +221,7 @@ def main() -> None:
     OUT_JSON.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = [
-        "# Interpreter 300 问法测试报告",
+        "# Para 300 问法测试报告",
         "",
         f"- **有答复**: {ok_n}/300 ({report['ok_rate']*100:.1f}%)",
         f"- **空答复**: {empty}",

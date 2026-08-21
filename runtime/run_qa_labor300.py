@@ -7,16 +7,16 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from cni.judge import clear_judge_cache
-from cni.kernel import boot
-from cni.knowledge.text_doc import load_user_memories
-from cni.paths import USER_DIR
-from cni.preprocess import load_user_dict
-from cni.route import turn
-from cni.session import Session
-from cni.system_tm import clear_system_cache
-from cni.tools.compile_labor_articles import extract_article_lines, main as compile_articles
-from cni.user_config import clear_user_config_cache
+from para.judge import clear_judge_cache
+from para.kernel import boot
+from para.knowledge.text_doc import load_user_memories
+from para.paths import USER_DIR
+from para.preprocess import load_user_dict
+from para.route import turn
+from para.session import Session
+from para.system_tm import clear_tm_caches
+from para.tools.compile_labor_articles import extract_article_lines, main as compile_articles
+from para.user_config import clear_user_config_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 LABOR = USER_DIR / "劳动法"
@@ -134,7 +134,7 @@ def expected_char(entity_line_content: str, idx: int) -> str | None:
 
 
 def main() -> None:
-    clear_system_cache()
+    clear_tm_caches()
     clear_judge_cache()
     clear_user_config_cache()
     load_user_dict.cache_clear()

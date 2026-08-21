@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cni"
+name = "para"
 version = "0.1.0"
-description = "Interpreter: rule-based Chinese NLU (isa/of facts, no LLM)"
+description = "Para: symbolic Chinese NLU (isa/of facts, no LLM)"
 requires-python = ">=3.12"
 dependencies = []
 
@@ -13,13 +13,13 @@ dependencies = []
 dev = ["pytest>=8"]
 
 [project.scripts]
-cni = "cni.cli:main"
+para = "para.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-cni = ["data/world/*.tm"]
+para = ["data/world/*.tm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

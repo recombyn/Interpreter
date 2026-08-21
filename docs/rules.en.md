@@ -26,7 +26,7 @@ Extras D66 / D67 / D69 / I11 / MEM4 are kernel extensions and do not change the 
 | 3. Op routing            | RO1–RO3                     | Teach vs chat; no soft-fail on teach                                          |
 | 4. World consistency     | WC1–WC3                     | Ignore dupes; keep contradictions; precise drop                               |
 | 5. Query priority        | QP1–QP3                     | Explicit > inferred > session > events; isa depth 2                           |
-| 6. Memory                | MEM1–MEM3 (+ MEM4)          | Focus stacks; durable events; reset; short-ask → D67                          |
+| 6. Memory                | MEM1–MEM3 (+ MEM4)          | Focus stacks; durable events; reset; short-ask → D67 / D69                    |
 | 7. Render fallback       | REN1–REN2                   | Bare surface; empty-result phrase                                             |
 | 8. Word order            | F41–F50                     | Dialect order / aspect rewrite (algorithmic)                                  |
 | 9. Normalize             | G1–G10                      | Quantity / relative date / fuzzy defaults                                     |
@@ -40,7 +40,7 @@ Extras D66 / D67 / D69 / I11 / MEM4 are kernel extensions and do not change the 
 | D67  | Point lookup by entity (memory ∪ sharded store); pin entity/doc/topic; O(1) content                             |
 | D68  | **Retired / split** — not a live rule. Short-ask → MEM4; compliance → D69. No open full-text search.            |
 | D69  | Threshold / enum judge via user `rules.tm` (`rule`/`tier` + triggers) + `limits.tm`; `D69.ask` if value missing |
-| MEM4 | Short follow-up (`那呢` / `违法吗` …) with entity pin → expand to D67                                                |
+| MEM4 | Short follow-up (`那呢` / `合法吗` …) with entity pin → D67 content, or D69 when pin ∈ judge topics (keep trigger) |
 
 There is **no D68 open-search rule**. Triggers in `rules.tm` (e.g. `合法吗|合规吗`) are examples users may extend; matching is by rule pattern, not an unbounded lexicon. User docs sync to `.tm` + `.content/` for D67 scale. Untaught world knowledge is never guessed.
 

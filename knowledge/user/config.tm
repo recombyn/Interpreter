@@ -19,6 +19,6 @@ reply_mode default
 #   warn    — 仍答第一条，但 Trace/Result 带 warn 与较低 confidence
 ambig_mode first
 
-# D69 阈值判定由 knowledge/user/rules.tm + limits.tm 驱动（无需改代码）
-# judge_cite on|off — D69 答案是否附「（见出处）」
+# D69 阈值判定：knowledge/user/**/rules.tm + 各领域 limits.tm（无需改代码）
+# judge_cite on|off — 是否附出处相关正文（有 content 则返回条文，不只报行号）
 judge_cite on

@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cni.kernel import boot
-from cni.render.forms import clear_forms_cache, form, load_forms
-from cni.user_config import reply_mode as load_reply_mode
-from cni.route import hear, turn
-from cni.session import Session
+from para.kernel import boot
+from para.render.forms import clear_forms_cache, form, load_forms
+from para.user_config import reply_mode as load_reply_mode
+from para.route import hear, turn
+from para.session import Session
 
 
 def test_reply_mode_bool_maps_yes_no(tmp_path: Path):
     clear_forms_cache()
     cfg = tmp_path / "config.tm"
     cfg.write_text("reply_mode bool\n", encoding="utf-8")
-    world = Path(__file__).resolve().parents[1] / "src" / "cni" / "data" / "world" / "form.tm"
+    world = Path(__file__).resolve().parents[1] / "src" / "para" / "data" / "world" / "form.tm"
     user = tmp_path / "form.tm"
     user.write_text("", encoding="utf-8")
     assert load_reply_mode(str(cfg)) == "bool"
@@ -27,7 +27,7 @@ def test_reply_mode_bool_maps_yes_no(tmp_path: Path):
 
 def test_reply_mode_zh_bool(tmp_path: Path):
     clear_forms_cache()
-    world = Path(__file__).resolve().parents[1] / "src" / "cni" / "data" / "world" / "form.tm"
+    world = Path(__file__).resolve().parents[1] / "src" / "para" / "data" / "world" / "form.tm"
     forms = load_forms(world, user_path=tmp_path / "missing.tm", reply_mode="zh_bool")
     assert forms["yes"] == "是"
     assert forms["no"] == "否"
@@ -36,7 +36,7 @@ def test_reply_mode_zh_bool(tmp_path: Path):
 
 def test_user_form_overrides_out(tmp_path: Path):
     clear_forms_cache()
-    world = Path(__file__).resolve().parents[1] / "src" / "cni" / "data" / "world" / "form.tm"
+    world = Path(__file__).resolve().parents[1] / "src" / "para" / "data" / "world" / "form.tm"
     user = tmp_path / "form.tm"
     user.write_text("out yes YES\nout no NO\n", encoding="utf-8")
     forms = load_forms(world, user_path=user, reply_mode="default")
@@ -50,17 +50,17 @@ def test_user_form_overrides_out(tmp_path: Path):
 
 def test_polar_question_bool_mode(monkeypatch, tmp_path: Path):
     clear_forms_cache()
-    world = Path(__file__).resolve().parents[1] / "src" / "cni" / "data" / "world" / "form.tm"
+    world = Path(__file__).resolve().parents[1] / "src" / "para" / "data" / "world" / "form.tm"
     user = tmp_path / "form.tm"
     user.write_text("", encoding="utf-8")
 
     def _forms(**_kwargs):
         return load_forms(world, user_path=user, reply_mode="bool")
 
-    monkeypatch.setattr("cni.render.forms.load_forms", lambda *a, **k: _forms())
-    monkeypatch.setattr("cni.render.forms.form", lambda c: _forms().get(c))
+    monkeypatch.setattr("para.render.forms.load_forms", lambda *a, **k: _forms())
+    monkeypatch.setattr("para.render.forms.form", lambda c: _forms().get(c))
 
-    from cni.decode import _no, _yes
+    from para.decode import _no, _yes
 
     assert _yes() == "true"
     assert _no() == "false"

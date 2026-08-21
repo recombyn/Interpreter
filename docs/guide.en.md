@@ -1,6 +1,6 @@
 <div align="center">
 
-# Interpreter Usage & Design Guide
+# Para Usage & Design Guide
 
 <p>
   <a href="./指南.md"><img alt="简体中文" src="https://img.shields.io/badge/简体中文-d9d9d9"></a>
@@ -33,7 +33,7 @@ The kernel does **not** rewrite `located`/`has` into `of(located,…)` / `of(has
 | **System** | MEM1–MEM3 | Memory: focus stack len 5; events durable / session temp; reset clears                                              | Memory management                           |
 | **System** | REN1–REN2 | Render fallback: bare surface if no template; empty-result phrase                                                   | Output fallback                             |
 
-> **Extensions** (in kernel; do not change the 110 count): D66 / D67 (content), D69 (threshold judge), MEM4 (short-ask → D67), I11 (poetry intercept). See the full rule catalog.
+> **Extensions** (in kernel; do not change the 110 count): D66 / D67 (content), D69 (threshold judge), MEM4 (short-ask → D67 or D69), I11 (poetry intercept). See the full rule catalog.
 
 ## Table 2: User lexicon (54)
 
@@ -72,7 +72,7 @@ User input
 └──────────────┬───────────────────┘
                ▼
 ┌─────────── D decode ─────────────┐
-│  D66/D67 literal early-exit; MEM4 short-ask→D67; else lex+D│
+│  MULTI / D66–D69 early-exit; MEM4→D67|D69; else lex+D      │
 │  write tell / read find·yesno    │
 └──────────────┬───────────────────┘
                ▼
@@ -82,7 +82,7 @@ User input
 └──────────────┬───────────────────┘
                ▼
 ┌─────────── REN output ───────────┐
-│  form/lex → NL                   │
+│  form.tm → NL (lex for word surfaces) │
 │  REN1 bare surface; REN2 empty phrase│
 └──────────────────────────────────┘
 ```
@@ -96,13 +96,13 @@ has(我, 电脑)                # native predicate
 of(kind, e.1, invent)        # event roles still use of
 of(content, 静夜思, 床前明月光)
 # D67: O(1) by entity (memory index ∪ knowledge/user/.content shards)
-# MEM4: short follow-up + entity pin → D67 (no open-search rule)
+# MEM4: short follow-up + pin → D67 content, or D69 when pin ∈ judge topics (keep trigger)
 ```
 
 ## Layout
 
 ```
-src/cni/
+src/para/
   data/world/   # bundled: lang / base / rules / lex / form
   knowledge/    # content_store: sharded bodies + term→entity index
   …             # Table 1 algorithms
@@ -121,16 +121,16 @@ docs/guide.en.md / 指南.md
 | `knowledge/user/form.tm` / `config.tm`                          | Reply overrides / switches (`reply_mode`)        |
 | `knowledge/user/rules.tm`                                       | Optional global D69 stub                         |
 | `knowledge/user/劳动法/rules.tm` · `limits.tm` · `article.maps.tm` | Domain judgment / caps / article→line maps       |
-| `src/cni/data/world/form.tm` · `lex.*.tm`                       | Bundled templates and lexemes                    |
+| `src/para/data/world/form.tm` · `lex.*.tm`                       | Bundled templates and lexemes                    |
 | `teach` / `教…`                                                  | Dialogue writes into the world                   |
 
 ### Generated vs hand-written `.tm`
 
 | Artifact                                 | How                                                      | Automation                                                     |
 | ----------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- |
-| `{doc}.tm` + `.content/`                 | `python -m cni.tools.sync_user_docs` (`--force` ok)      | **Full**: line entities + shards for D66/D67                   |
-| `劳动法/article.maps.tm`                    | `python -m cni.tools.compile_labor_articles --write`     | **Full**: `map 第八条 → 第N行`; merged into lexicon                 |
-| Caps in `limits.tm`                      | `python -m cni.tools.compile_limits --write`             | **Semi**: scrape 「不得超过/不少于…」 using `rules.tm` topics; editable |
+| `{doc}.tm` + `.content/`                 | `python -m para.tools.sync_user_docs` (`--force` ok)      | **Full**: line entities + shards for D66/D67                   |
+| `劳动法/article.maps.tm`                    | `python -m para.tools.compile_labor_articles --write`     | **Full**: `map 第八条 → 第N行`; merged into lexicon                 |
+| Caps in `limits.tm`                      | `python -m para.tools.compile_limits --write`             | **Semi**: scrape 「不得超过/不少于…」 using `rules.tm` topics; editable |
 | `许可` / `书面约定` in `limits.tm`             | Same tool may append a fixed sample block; or hand-write | **Not** reliably extracted from statute text                   |
 | `**/rules.tm` (`rule` / `tier`)          | Hand-write                                               | **Never auto**: judgment shape + triggers                      |
 | `user_dict.tm` / `form.tm` / `config.tm` | Hand-write                                               | **Never auto** (aside from `*.maps.tm`)                        |
@@ -171,7 +171,7 @@ Shared by `劳动法.tm`, `labor_law.tm`, `limits.tm`, and taught facts. Support
 | File                       | Role                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------- |
 | `*.text` (e.g. `劳动法.text`) | Line-oriented source                                                            |
-| sibling `.tm`              | From `python -m cni.tools.sync_user_docs` (`--force` optional); D67 line recall |
+| sibling `.tm`              | From `python -m para.tools.sync_user_docs` (`--force` optional); D67 line recall |
 
 - Entities: `第N行` and `{doc}第N行`  
 - Blank source lines → placeholder `（空行）`  
@@ -199,7 +199,7 @@ Principle: **pin “which doc / entity / topic we’re on”, and let short asks
 | Pin            | Meaning              | Used by                               |
 | --------------- | --------------------- | -------------------------------------- |
 | `doc_focus`    | Current doc stem     | Bare `第N行` → prefer `{doc}第N行` in D67 |
-| `entity_focus` | Current entity       | 这/那/他; MEM4 short-ask → D67           |
+| `entity_focus` | Current entity       | 这/那/他; MEM4 short-ask → D67 / D69     |
 | `topic_focus`  | Recent content terms | Context marks (not a search index)    |
 | `event_focus`  | Event `e.n`          | Event deixis                          |
 
@@ -216,18 +216,18 @@ Template matching is not full syntax. Practical knobs:
 | Threshold judgment | **D69**: `rules.tm` + `limits.tm`; `compile_limits` extracts caps; `D69.ask` for missing value; `in` for enums |
 | Coref              | MEM5: `他/她` prefers `last_patient`                                                                             |
 | Negation write     | Teach of `不/没…` does not store a negated event; queries use D57/D58                                            |
-| MEM4               | Only very short follow-ups (≤4 chars or listed patterns); full polars like「电脑是机器吗」 stay D21                    |
+| MEM4               | Short follow-ups only; legality cues on judge pins → D69 (preserve trigger); else D67 content |
 
 ## Examples
 
 ```bash
-python -m cni teach "电脑是机器"
-python -m cni reply "电脑是什么"
-python -m cni teach "静夜思的内容是床前明月光"
-python -m cni reply "静夜思的内容是什么"
-python -m cni.tools.sync_user_docs --force
-python -m cni reply "第20行的内容是什么"
-python -m cni reply "那呢"   # MEM4 → same entity via D67
+python -m para teach "电脑是机器"
+python -m para reply "电脑是什么"
+python -m para teach "静夜思的内容是床前明月光"
+python -m para reply "静夜思的内容是什么"
+python -m para.tools.sync_user_docs --force
+python -m para reply "第20行的内容是什么"
+python -m para reply "那呢"   # MEM4 → same entity via D67
 ```
 
 Table 2 maps: `knowledge/user/user_dict.tm` (`map source standard`).
@@ -236,11 +236,11 @@ Table 2 maps: `knowledge/user/user_dict.tm` (`map source standard`).
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m cni teach "电脑是机器"
-python -m cni reply "电脑是什么"
-python -m cni repl
+python -m para teach "电脑是机器"
+python -m para reply "电脑是什么"
+python -m para repl
 python -m pytest
-python -m cni reply "电脑是什么" --trace
+python -m para reply "电脑是什么" --trace
 ```
 
 ## Boundaries

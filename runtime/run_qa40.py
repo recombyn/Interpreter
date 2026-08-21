@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cni.judge import clear_judge_cache
-from cni.kernel import boot
-from cni.knowledge.text_doc import load_user_memories
-from cni.route import hear, turn
-from cni.session import Session
-from cni.user_config import clear_user_config_cache
+from para.judge import clear_judge_cache
+from para.kernel import boot
+from para.knowledge.text_doc import load_user_memories
+from para.route import hear, turn
+from para.session import Session
+from para.user_config import clear_user_config_cache
 
 OUT = Path("runtime/qa40_report.json")
 

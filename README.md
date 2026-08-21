@@ -1,6 +1,6 @@
-<div align="center">
+﻿<div align="center">
 
-# Interpreter
+# Para
 
 <p>
   <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/English-d9d9d9"></a>
@@ -9,163 +9,66 @@
 
 </div>
 
-> Natural language → symbolic rule engine → world facts. **No LLM. No regex black box.**
+> **A pluggable Chinese decoder**: precise understanding, zero hallucination; knowledge owned entirely by the host.
 
-## What this is
+## Contract
 
-Interpreter is a **purely symbolic Chinese language understanding engine**.
+| Promise | Meaning |
+| --- | --- |
+| **Faithful in-scope** | Covered constructions + taught facts → deterministic |
+| **Refuse out-of-scope** | Untaught world knowledge → explicit miss, **never invent** |
+| **Knowledge outside** | Grammar in the engine; facts in `knowledge/user/` (or your injected dir) |
+| **Auditable** | Every outcome carries `rule`; optional `facts_added` |
 
-You teach it knowledge in natural language; it answers in natural language. There is no neural network underneath—only a readable, auditable, extensible set of symbolic rules.
+Not an open-domain chatbot. Coverage grows by rules, not by guessing.
 
-```
-You say: "电脑是机器"
-→ Engine records: isa(电脑, 机器)
+## Plug into any host
 
-You ask: "电脑是什么"
-→ Engine answers: "电脑是机器"
-```
+```python
+from para import Para
 
-## Why it exists
+eng = Para(load_user_docs=False, user_dir="./my_knowledge")
 
-**Problem**
+w = eng.decode("教电脑是机器", write=True)
+# w.status == "write"; w.facts_added includes isa(电脑, 机器)
 
-| Approach                                      | Limitation                                                    |
-| ---------------------------------------------- | -------------------------------------------------------------- |
-| Regex / keyword matching                      | Narrow coverage; maintenance explodes with input variants     |
-| Traditional NLP (tokenize + POS + dependency) | Heavy toolchain; brittle generalization; rules hard to change |
-| Large language models (LLMs)                  | Hallucination, opacity, high cost, hard to audit precisely    |
+q = eng.decode("电脑是什么", write=False)
+# q.status == "query"; q.spoken == "电脑是机器"
 
-**Goals**
-
-Interpreter aims to be **controllable, explainable, extensible, and hallucination-free**.
-
-- It only knows what you taught it—no guessing, no invention
-- Every inference path is traceable (`--trace`)
-- Grammar rules live in code; knowledge lives in files
-- Runs offline in resource-constrained or privacy-sensitive settings
-
-## Comparison
-
-| Capability                        | Regex   | Traditional NLP     | LLM           | Interpreter        |
-| --------------------------------- | ------- | ------------------- | ------------- | ------------------ |
-| Understand NL structure           | ✗       | △ (corpus-trained)  | ✓             | ✓ (symbolic rules) |
-| Auditable results                 | ✓       | △                   | ✗ (black box) | ✓ (step-by-step)   |
-| Zero hallucination                | ✓       | △                   | ✗             | ✓                  |
-| Many constructions (ba/bei, …)    | ✗       | △                   | ✓             | ✓ (65 D-rules)     |
-| Typo / homophone correction       | ✗       | △                   | ✓             | ✓ (E-series)       |
-| Dialect / colloquial input        | ✗       | ✗                   | ✓             | ✓ (F/G-series)     |
-| No internet / no API cost         | ✓       | ✓                   | ✗             | ✓                  |
-| User-extensible lexicon           | ✗       | △                   | ✗             | ✓ (`user_dict.tm`) |
-| Clear knowledge boundary          | ✓       | △                   | ✗             | ✓                  |
-
-## Design
-
-**Pipeline**
-
-```
-Input
- │
- ▼
-E (fix) → user_dict → F41–50 (word order) → G (quantity/time) → I (social intercept)
- │                                                                      │
- │ (pass-through)                                                       │ (hit → reply)
- ▼
-D (syntactic decode: 65 rules)
- │
- ▼
-Kernel (RO routing / WC consistency / QP query / MEM memory / REN render)
- │
- ▼
-Output (natural language)
+u = eng.decode("火星上有独角兽吗")
+# u.miss / refuse — no fabricated yes
 ```
 
-**Fact shape (on disk)**
+Hosts consume `DecodeOutcome` (or `.to_dict()`). Justification for answers lives in `evidence` (retrieved knowledge snippets), separate from `spoken`. Convenience: `teach()` / `reply()` / `interpret()`.
 
-```
-isa(电脑, 机器)              # class membership
-located(电脑, 桌上)          # location
-has(我, 电脑)                # possession
-of(kind, e.1, 发明)          # event role
-of(content, 静夜思, 床前明月光) # content
-```
+## Case study: labor law
 
-**Rule layers**
+End-to-end user knowledge pack (concepts + statute lines + D69 limits):
 
-| Layer                | Content                                              | Count | Owner          |
-| --------------------- | ----------------------------------------------------- | ------ | --------------- |
-| **Table 1 (kernel)** | Syntax / fix / order / time / social core algorithms | 110   | Engine kernel  |
-| **Table 2 (user)**   | Abbreviations, dialect, CN–EN mix, emoji maps, etc.  | 54    | `user_dict.tm` |
+- Walkthrough: [examples/labor_law/README.md](examples/labor_law/README.md)
+- Demo: `PYTHONPATH=src python examples/labor_law/demo.py`
+- Eval: `PYTHONPATH=src python -m para.tools.eval_labor_law`
 
-Table 1 is algorithm; Table 2 is lexicon maps.
-
-## What you can do
-
-- **Teach**: state facts in natural language; the engine parses and persists them
-- **Ask**: query in natural language against stored facts
-- **Complex syntax**: ba/bei constructions, cause/contrast/condition complexes, questions, etc.
-- **Tolerant input**: typos, homophones, extra characters
-- **Colloquial Chinese**: Cantonese order, fuzzy quantities, relative dates
-- **Focus memory**: pronoun resolution via a dialogue focus stack
-- **Inference**: `isa` inheritance chains (depth ≤ 2)
-
-## Quick start
-
-The Python package and CLI entry remain `cni` (`python -m cni …`).
+## Install
 
 ```bash
 pip install -e ".[dev]"
-
-# Teach
-python -m cni teach "电脑是机器"
-python -m cni teach "静夜思的内容是床前明月光"
-
-# Query
-python -m cni reply "电脑是什么"
-python -m cni reply "静夜思的内容是什么"
-
-# Interactive
-python -m cni repl
-
-# Debug (show inference chain)
-python -m cni reply "电脑是什么" --trace
-
-# Tests
-python -m pytest
-```
-
-In `repl`, lines starting with `教|记住|学习|记` write to the world; everything else is read-only query.
-
-## Custom lexicon
-
-Edit `knowledge/user/user_dict.tm`:
-
-```
-map yyds 永远的神
-map check 检查
-map 偶 我
+python -m para teach "电脑是机器"
+python -m para reply "电脑是什么"
+python -m para decode "电脑是什么"
 ```
 
 ## Layout
 
 ```
-src/cni/
-  data/world/  # bundled world data (lang/base/lex/form/rules)
-knowledge/
-  user/        # user lexicon (Table 2)
-docs/
-  rules.en.md / 规则全表.md
-  guide.en.md / 指南.md
+src/para/           # decode algorithms (no domain knowledge)
+knowledge/user/            # user knowledge & surfaces
+knowledge/user/劳动法/     # labor-law case pack
+examples/labor_law/        # host integration demo
+docs/                      # rules & guides
 ```
-
-## Boundaries
-
-- Untaught facts are **never guessed**; reply is “我不了解这个信息”
-- No open-domain chit-chat writes (non-teach paths do not persist)
-- No poetry appreciation (I11 intercept)
-- `isa` chain depth capped at 2; no full-graph walk
 
 ## Docs
 
-- **Rule catalog**: [docs/rules.en.md](docs/rules.en.md) (Chinese patterns: [规则全表.md](docs/规则全表.md))
-- **Architecture & guide**: [docs/guide.en.md](docs/guide.en.md) (includes **user-layer `.tm` syntax**: `!` / `+`, labor-law file split, D69 `rules`/`limits`)
-- **中文**: [README.zh.md](README.zh.md) · [docs/指南.md](docs/指南.md)
+- [docs/guide.en.md](docs/guide.en.md) · [docs/rules.en.md](docs/rules.en.md)
+- 中文：[README.zh.md](README.zh.md) · [docs/指南.md](docs/指南.md)
