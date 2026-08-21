@@ -51,7 +51,37 @@ def test_decode_to_dict_host_shape(tmp_path):
         "spoken",
         "facts_added",
         "evidence",
+        "suggestions",
         "miss",
     }
     assert isinstance(d["facts_added"], list)
     assert isinstance(d["evidence"], list)
+    assert isinstance(d["suggestions"], list)
+
+
+def test_suggestions_add_rule_for_unknown_legal_topic(tmp_path):
+    eng = Para(remember=False, load_user_docs=False, user_dir=tmp_path)
+    out = eng.decode("加班四小时合法吗")
+    assert out.suggestions
+    kinds = {s.kind for s in out.suggestions}
+    assert "add_rule" in kinds
+    assert "add_limit" in kinds
+    assert out.spoken == out.spoken  # suggestions must not leak into spoken
+    assert all("加班" in (s.topic or s.text) for s in out.suggestions if s.kind != "need_doc")
+
+
+def test_suggestions_need_doc_on_open_refuse(tmp_path):
+    eng = Para(remember=False, load_user_docs=False, user_dir=tmp_path)
+    out = eng.decode("火星上有独角兽吗")
+    if out.miss or out.status == "refuse":
+        assert any(s.kind == "need_doc" for s in out.suggestions)
+    # must not invent
+    assert "独角兽是" not in (out.spoken or "")
+
+
+def test_suggestions_empty_on_faithful_query(tmp_path):
+    eng = Para(remember=False, load_user_docs=False, user_dir=tmp_path)
+    eng.decode("教电脑是机器", write=True)
+    out = eng.decode("电脑是什么", write=False)
+    assert out.status == "query"
+    assert out.suggestions == ()

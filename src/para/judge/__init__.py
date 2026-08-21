@@ -60,6 +60,19 @@ _COND_CUE = re.compile(r"^(?:什么情况下|何种情况|什么条件|在什么
 _NEG_TRIG = frozenset({"违法吗", "违法"})
 # Positive compliance asks (same polarity as 合法吗)
 _POS_LEGAL_TRIG = frozenset({"不违法吗", "不违法", "合法吗", "合法", "合不合法"})
+# Longest-first tails for and-clause / all-legal surface matching (question forms)
+_LEGAL_TAILS = tuple(
+    sorted(
+        {t for t in (_POS_LEGAL_TRIG | _NEG_TRIG) if t.endswith("吗") or t == "合不合法"}
+        | {"严格合法吗", "合规吗", "可以吗"},
+        key=len,
+        reverse=True,
+    )
+)
+# Strip leftovers in decode dur surface (includes bare 合法/违法)
+_LEGAL_JUNK = tuple(
+    sorted(_POS_LEGAL_TRIG | _NEG_TRIG | set(_LEGAL_TAILS), key=len, reverse=True)
+)
 
 
 def strip_cond_cue(text: str) -> tuple[str, bool]:
@@ -596,7 +609,8 @@ def match_judge(
             mid_prob = m.group(2).strip("，, ")
             denied = _scan_also_denied(body, rule)
             mid_prob = _strip_denied_surface(mid_prob, frozenset(denied))
-            alts = _split_or_durations(mid_prob)
+            probation, _c, alts, _not_d = _parse_mid_durations(mid_prob)
+            # Pattern B: ignore not_duration (不是…) — leave for Pattern A
             if alts:
                 return JudgeHit(
                     rule=rule,
@@ -606,7 +620,6 @@ def match_judge(
                     alt_durations=alts,
                     **_hit_flags(trig, explain=explain),
                 )
-            probation = parse_duration(mid_prob)
             if probation is None:
                 continue
             return JudgeHit(
@@ -705,17 +718,6 @@ def match_judge(
     return None
 
 
-_LEGAL_TAILS = (
-    "严格合法吗",
-    "合不合法",
-    "不违法吗",
-    "违法吗",
-    "合规吗",
-    "可以吗",
-    "合法吗",
-)
-
-
 def _and_clause_pair(
     text: str, rules: tuple[JudgeRule, ...] | None = None
 ) -> tuple[str, str, str] | None:
@@ -811,10 +813,7 @@ def find_judge_spans(
                             pre = left[:tidx]
                             for cue in (
                                 "既没有书面约定又",
-                                "没有书面约定",
-                                "未书面约定",
-                                "且没有书面约定",
-                                "且未书面约定",
+                                *(f"{p}书面约定" for p in ("没有", "未", "且没有", "且未")),
                             ):
                                 if pre.endswith(cue):
                                     span_start = tidx - len(cue)
@@ -872,6 +871,16 @@ def _parse_limit_num(limit_s: str) -> int | None:
         return None
 
 
+def _ask_for_duration(topic: str, unit: str) -> str:
+    if unit == "月":
+        return f"请问{topic}几个月？"
+    if unit == "天":
+        return f"请问{topic}多少天？"
+    if unit == "年":
+        return f"请问{topic}几年？"
+    return f"请问{topic}多久？"
+
+
 def evaluate_hit(
     machine: MachineWorld,
     hit: JudgeHit,
@@ -894,19 +903,11 @@ def evaluate_hit(
         )
     if hit.not_duration:
         unit = of_value(machine, "单位", rule.topic) or ""
-        if unit == "月":
-            ask = f"请问{rule.topic}几个月？"
-        elif unit == "天":
-            ask = f"请问{rule.topic}多少天？"
-        elif unit == "年":
-            ask = f"请问{rule.topic}几年？"
-        else:
-            ask = f"请问{rule.topic}多久？"
         return JudgeOutcome(
             kind="ask",
             topic=rule.topic,
             detail="not_value",
-            ask=ask,
+            ask=_ask_for_duration(rule.topic, unit),
             source=source,
             trigger=trig,
             invert_polar=inv,
@@ -974,14 +975,7 @@ def evaluate_hit(
             ask = f"请问{rule.topic}是哪一种？"
         else:
             unit = of_value(machine, "单位", rule.topic) or ""
-            if unit == "月":
-                ask = f"请问{rule.topic}几个月？"
-            elif unit == "天":
-                ask = f"请问{rule.topic}多少天？"
-            elif unit == "年":
-                ask = f"请问{rule.topic}几年？"
-            else:
-                ask = f"请问{rule.topic}多久？"
+            ask = _ask_for_duration(rule.topic, unit)
         return JudgeOutcome(
             kind="ask",
             topic=rule.topic,
@@ -1221,6 +1215,47 @@ def _match_pending_duration_legal(
 _ALL_LEGAL = re.compile(r"^(.+)都(合法吗|合规吗|可以吗)$")
 
 
+def _combine_topic_outcomes(
+    outcomes: list[JudgeOutcome],
+    trig: str,
+) -> JudgeOutcome:
+    ok = all(o.ok for o in outcomes)
+    topics = "+".join(o.topic for o in outcomes)
+    sources = "；".join(dict.fromkeys(o.source for o in outcomes if o.source))
+    conds = "；".join(o.conditions for o in outcomes if o.conditions)
+    return JudgeOutcome(
+        kind="answer",
+        topic=topics,
+        ok=ok,
+        detail="all_topics",
+        source=sources,
+        trigger=trig,
+        conditions=conds,
+    )
+
+
+def _eval_clause_parts(
+    machine: MachineWorld,
+    parts: list[str],
+    trig: str,
+    *,
+    rules: tuple[JudgeRule, ...],
+    waived_also: frozenset[str] | set[str] | None = None,
+) -> JudgeOutcome | None:
+    if len(parts) < 2:
+        return None
+    outcomes: list[JudgeOutcome] = []
+    for part in parts:
+        h = match_judge(part + trig, rules=rules)
+        if h is None:
+            return None
+        out = evaluate_hit(machine, h, waived_also=waived_also)
+        if out.kind not in {"answer", "explain"}:
+            return None
+        outcomes.append(out)
+    return _combine_topic_outcomes(outcomes, trig)
+
+
 def _judge_all_topics(
     machine: MachineWorld,
     text: str,
@@ -1235,30 +1270,8 @@ def _judge_all_topics(
         return None
     left, trig_tail = m.group(1), m.group(2)
     parts = [p.strip() for p in re.split(r"并且|且", left) if p.strip()]
-    if len(parts) < 2:
-        return None
-    outcomes: list[JudgeOutcome] = []
-    for part in parts:
-        frag = part + trig_tail
-        h = match_judge(frag, rules=rules)
-        if h is None:
-            return None
-        out = evaluate_hit(machine, h, waived_also=waived_also)
-        if out.kind not in {"answer", "explain"}:
-            return None
-        outcomes.append(out)
-    ok = all(o.ok for o in outcomes)
-    topics = "+".join(o.topic for o in outcomes)
-    sources = "；".join(dict.fromkeys(o.source for o in outcomes if o.source))
-    conds = "；".join(o.conditions for o in outcomes if o.conditions)
-    return JudgeOutcome(
-        kind="answer",
-        topic=topics,
-        ok=ok,
-        detail="all_topics",
-        source=sources,
-        trigger=trig_tail,
-        conditions=conds,
+    return _eval_clause_parts(
+        machine, parts, trig_tail, rules=rules, waived_also=waived_also
     )
 
 
@@ -1274,27 +1287,8 @@ def _judge_and_clauses(
     if pair is None:
         return None
     left, right, trig = pair
-    outcomes: list[JudgeOutcome] = []
-    for part in (left, right):
-        h = match_judge(part + trig, rules=rules)
-        if h is None:
-            return None
-        out = evaluate_hit(machine, h, waived_also=waived_also)
-        if out.kind not in {"answer", "explain"}:
-            return None
-        outcomes.append(out)
-    ok = all(o.ok for o in outcomes)
-    topics = "+".join(o.topic for o in outcomes)
-    sources = "；".join(dict.fromkeys(o.source for o in outcomes if o.source))
-    conds = "；".join(o.conditions for o in outcomes if o.conditions)
-    return JudgeOutcome(
-        kind="answer",
-        topic=topics,
-        ok=ok,
-        detail="all_topics",
-        source=sources,
-        trigger=trig,
-        conditions=conds,
+    return _eval_clause_parts(
+        machine, [left, right], trig, rules=rules, waived_also=waived_also
     )
 
 

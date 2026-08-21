@@ -136,7 +136,17 @@ docs/guide.en.md / 指南.md
 | `user_dict.tm` / `form.tm` / `config.tm` | Hand-write                                               | **Never auto** (aside from `*.maps.tm`)                        |
 | `labor_law.tm`                           | Hand-write (optional mini-graph)                         | **Never auto**; distinct from line-index `劳动法.tm`              |
 
+`DecodeOutcome.suggestions` may **propose** user-side patches (`add_rule` / `add_limit` / `need_doc`); hosts confirm before writing. System world stays read-only.
+
 Suggested order for labor law: drop `劳动法.text` → `sync_user_docs` → `compile_labor_articles --write` → author `rules.tm` → `compile_limits --write` → patch enum facts as needed. D69 merges `knowledge/user/**/rules.tm` (not world facts); `limits.tm` loads into the world.
+
+New domain (user tree only):
+
+```bash
+python -m para.tools.init_domain my_policy
+python -m para.tools.validate_domain my_policy
+python -m para.tools.validate_domain --all
+```
 
 ## User-layer `.tm` syntax
 
@@ -204,6 +214,9 @@ Principle: **pin “which doc / entity / topic we’re on”, and let short asks
 | `event_focus`  | Event `e.n`          | Event deixis                          |
 
 No D68 open-search rule: without a resolvable entity → REN2 / normal miss.
+
+`DecodeOutcome.evidence` carries retrieved grounds (ref + body), separate from `spoken`.  
+On knowledge gaps, **`DecodeOutcome.suggestions`** proposes user-side `.tm` patches (`add_rule` / `add_limit` / `need_doc`) — never auto-written; host confirms into `user_dir`.
 
 ## Decode mitigations (D-layer limits)
 

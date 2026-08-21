@@ -82,8 +82,8 @@ MODULES: tuple[Module, ...] = (
     Module("8.1", 8, "multi user_dir isolation", "GREEN", ("tests/master/test_dim8_domain.py",)),
     Module("8.2", 8, "DecodeOutcome API contract", "GREEN", ("tests/test_decode_api.py",)),
     Module("8.3", 8, "eval_d69_100 gate", "GREEN", ("src/para/tools/eval_d69_100.py",)),
-    Module("8.4", 8, "1000+ cases <1s", "PARTIAL", ("tests/master/test_dim8_stretch_smoke.py",)),
-    Module("8.5", 8, "100k-turn leak check", "PARTIAL", ("tests/master/test_dim8_stretch_smoke.py",)),
+    Module("8.4", 8, "1000+ cases <1s", "GREEN", ("tests/master/test_dim8_stretch_smoke.py",)),
+    Module("8.5", 8, "100k-turn leak check", "GREEN", ("tests/master/test_dim8_stretch_smoke.py",)),
 )
 
 assert len(MODULES) == 42, f"expected 42 modules, got {len(MODULES)}"

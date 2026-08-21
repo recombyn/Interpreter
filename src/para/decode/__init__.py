@@ -1155,7 +1155,7 @@ def _try_d69(
 
 
 def _d69_dur_surface(question: str, topic: str, trigger: str) -> str:
-    from para.judge import parse_duration, strip_cond_cue
+    from para.judge import _LEGAL_JUNK, strip_cond_cue
 
     raw, _ = strip_cond_cue(question or "")
     if trigger and raw.endswith(trigger):
@@ -1165,15 +1165,16 @@ def _d69_dur_surface(question: str, topic: str, trigger: str) -> str:
     else:
         mid = raw.strip("，, ")
     # Drop trailing legality leftovers if cue/trigger mismatch
-    for junk in ("合法吗", "合法", "不违法吗", "不违法", "违法吗", "违法", "合规吗", "可以吗"):
+    for junk in _LEGAL_JUNK:
         if mid.endswith(junk) and mid != junk:
             mid = mid[: -len(junk)].strip("，, ")
+            break
     return mid
 
 
 def _d69_spoken(hit, ask_for_tone: str, text: str) -> str:
     """Compose D69 spoken: conditional/explain narrative, else polar."""
-    from para.judge import parse_duration
+    from para.judge import _NEG_TRIG, parse_duration
 
     if getattr(hit, "detail", "") == "all_topics":
         spoken = "都合法" if hit.ok else "不都合法"
@@ -1204,10 +1205,9 @@ def _d69_spoken(hit, ask_for_tone: str, text: str) -> str:
                 break
         if not dur_surf:
             dur_surf = _d69_dur_surface(text or ask_for_tone, hit.topic, hit.trigger or "")
-        inv = bool(getattr(hit, "invert_polar", False)) or (hit.trigger or "") in {
-            "违法吗",
-            "违法",
-        }
+        inv = bool(getattr(hit, "invert_polar", False)) or (
+            (hit.trigger or "") in _NEG_TRIG
+        )
         if hit.ok:
             if inv:
                 spoken = f"{hit.topic}{dur_surf}不违法。相关规定：{cond}"

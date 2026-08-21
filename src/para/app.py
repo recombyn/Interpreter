@@ -14,6 +14,7 @@ from para.preprocess import clear_user_dict_cache
 from para.render.forms import clear_forms_cache
 from para.route import hear, is_teach, strip_teach, turn
 from para.session import Session
+from para.suggest import attach_suggestions
 from para.text.normalize import normalize_text
 from para.text.utf8 import as_text
 from para.user_config import clear_user_config_cache
@@ -98,7 +99,7 @@ class Para:
         # ok: host can trust the outcome as a successful understand/act
         trusted = status in {"write", "query", "social"} and bool(got.ok)
         evidence = tuple(getattr(got, "evidence", ()) or ())
-        return DecodeOutcome(
+        outcome = DecodeOutcome(
             ok=trusted,
             status=status,
             rule=got.rule or "",
@@ -112,6 +113,7 @@ class Para:
             confidence=getattr(got, "confidence", 1.0),
             warn=getattr(got, "warn", "") or "",
         )
+        return attach_suggestions(outcome, user_dir=self.user_dir)
 
     def teach(self, text: str | bytes) -> str:
         return self.decode(text, write=True).spoken

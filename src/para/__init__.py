@@ -1,4 +1,11 @@
-from para.api import DecodeOutcome, KnowledgeHit, WorldFact
+from para.api import DecodeOutcome, KnowledgeHit, KnowledgeSuggestion, WorldFact
 from para.app import Para, Trace
 
-__all__ = ["DecodeOutcome", "Para", "KnowledgeHit", "Trace", "WorldFact"]
+__all__ = [
+    "DecodeOutcome",
+    "KnowledgeHit",
+    "KnowledgeSuggestion",
+    "Para",
+    "Trace",
+    "WorldFact",
+]

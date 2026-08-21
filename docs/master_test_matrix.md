@@ -8,7 +8,8 @@
 |----|------|
 | 解码产物 | `DecodeOutcome`：`spoken` / `rule` / `facts_added` / `evidence` / `status` |
 | 「AST 100%」 | **无 AST**。结构验收 = `facts_added` + `world.find` / `apply(? …)` |
-| 性能 L4「1000 例 <1s」 | **Stretch**：全量 `boot()` 单测远超 1s；纯函数层（E/F/G）可毫秒级。CI 门禁分 `L1`/`L2`/`L3`/`slow` |
+| 性能 L4「1000 例 <1s」 | **门禁**：纯 E/F/G 路径 1000 次 &lt;1s + 单 boot 热路径；全量 `pytest`/`boot` 每例不计此口径 |
+| 泄漏 8.5 | **门禁**：10 万次 pin 有界 + 500 turn tracemalloc 峰值增量；非「10 万次完整 decode」 |
 | 多领域隔离 | 单 `Para` 下 `user/**` **合并**进同一 world；真隔离 = 不同 `user_dir` / 不同 `Para` 实例 |
 | D68 | 已退役，矩阵中标记 N/A |
 
@@ -93,7 +94,7 @@
 | # | 模块 | 状态 | 主要位置 |
 |---|------|------|----------|
 | 8.1 | 多领域隔离 | GREEN | `tests/master/test_dim8_domain.py`（双 `user_dir` + judge_topics） |
-| 8.2 | 1000+ / <1s / 泄漏 | PARTIAL | `test_dim8_stretch_smoke.py`：纯函数 1000 次 <1s + 10k push 栈有界；全量 boot/10 万轮仍为 stretch |
+| 8.2 | 1000+ / &lt;1s / 泄漏 | GREEN | `test_dim8_stretch_smoke.py`：纯路径 1000&lt;1s、单 boot 100 turn、10 万 pin 有界、500 turn 内存；5k 前缀为 stretch |
 
 ## 怎么跑
 

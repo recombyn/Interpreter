@@ -41,6 +41,5 @@ def test_green_owners_exist():
 @pytest.mark.L1
 def test_status_summary_printable():
     summary = {k: len(v) for k, v in by_status().items()}
-    assert summary.get("GREEN", 0) >= 35
-    # Full boot 1000@1s / 100k leak remain non-GREEN (PARTIAL stretch proxies)
-    assert summary.get("PARTIAL", 0) + summary.get("STRETCH", 0) >= 1
+    assert summary.get("GREEN", 0) == 42
+    assert summary.get("PARTIAL", 0) + summary.get("GAP", 0) == 0

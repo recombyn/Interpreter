@@ -47,7 +47,8 @@ python -m para decode "试用期六个月合法吗"
 python -m para decode "教兼职是工作" --write true
 ```
 
-`DecodeOutcome.evidence` 单独承载检索到的相关知识（出处 ref + 正文 text），与 `spoken` 解耦，主机可自行展示「为何这样答」。
+`DecodeOutcome.evidence` separately carries retrieved knowledge (ref + body), decoupled from `spoken` so hosts can show “why this answer.”  
+Gaps surface as **`suggestions`** (proposed `rules.tm` / `limits.tm` lines or `need_doc`) — confirm before writing; never auto-apply.
 
 ## 长句与一次多问
 

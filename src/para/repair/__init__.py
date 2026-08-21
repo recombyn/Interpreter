@@ -91,14 +91,23 @@ def _protected_phrases() -> tuple[str, ...]:
                     phrases.add(trig)
     except ImportError:
         phrases = {
+            "严格合法吗",
             "合不合法",
             "不违法吗",
             "违法吗",
-            "合法吗",
             "合规吗",
             "可以吗",
+            "合法吗",
         }
     return tuple(sorted(phrases, key=len, reverse=True))
+
+
+def _longest_at(raw: str, i: int, keys: list[str] | tuple[str, ...]) -> str:
+    hit = ""
+    for key in keys:
+        if raw.startswith(key, i) and len(key) > len(hit):
+            hit = key
+    return hit
 
 
 def repair(raw: str, vocab: set[str], known: set[str]) -> str:
@@ -129,18 +138,12 @@ def repair(raw: str, vocab: set[str], known: set[str]) -> str:
             i += 1
             continue
         # Protect judge triggers (e.g. 合不合法) before exact/chunk so pin cannot rewrite 合→和
-        prot = ""
-        for phrase in protected:
-            if raw.startswith(phrase, i) and len(phrase) > len(prot):
-                prot = phrase
+        prot = _longest_at(raw, i, protected)
         if prot:
             out.append(prot)
             i += len(prot)
             continue
-        hit = ""
-        for key in exact_keys:
-            if raw.startswith(key, i) and len(key) > len(hit):
-                hit = key
+        hit = _longest_at(raw, i, exact_keys)
         if hit:
             # E4: 「机器器」— exact prefix + one redundant twin char
             clen = len(hit) + 1
@@ -173,16 +176,6 @@ def repair(raw: str, vocab: set[str], known: set[str]) -> str:
             out.append(e2[0])
             i = j
             continue
-        # Before single-char pin rewrite: never rewrite inside a protected trigger
-        pin_blocked = False
-        for phrase in protected:
-            if raw.startswith(phrase, i):
-                out.append(phrase)
-                i += len(phrase)
-                pin_blocked = True
-                break
-        if pin_blocked:
-            continue
         ch = raw[i]
         if len(chunk) == 1 and ch in pins and pins[ch] in exact_keys:
             out.append(pins[ch])
@@ -196,7 +189,6 @@ def repair(raw: str, vocab: set[str], known: set[str]) -> str:
                 window = raw[i : i + clen]
                 if len(window) < len(key):
                     continue
-                # E3: same-len pin typo; E4: one extra char, delete recovers pin-key
                 if _e3_match(window, key, pins) or _e4_match(window, key, pins):
                     best.append((key, clen))
         uniq = {k for k, _ in best}

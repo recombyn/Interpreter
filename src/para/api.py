@@ -48,6 +48,29 @@ class KnowledgeHit:
 
 
 @dataclass(frozen=True)
+class KnowledgeSuggestion:
+    """Proposed user-side .tm patch — host must confirm before writing.
+
+    Never auto-applied. Separate from spoken (reply) and evidence (grounds).
+    """
+
+    kind: str  # add_rule | add_limit | add_trigger | need_doc
+    path: str  # relative to user_dir, e.g. 劳动法/rules.tm
+    text: str  # suggested lines to append (may be empty for need_doc)
+    reason: str = ""
+    topic: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "path": self.path,
+            "text": self.text,
+            "reason": self.reason,
+            "topic": self.topic,
+        }
+
+
+@dataclass(frozen=True)
 class DecodeOutcome:
     """Plug-in result: host renders/stores; this engine only understands."""
 
@@ -59,6 +82,7 @@ class DecodeOutcome:
     focus: str = ""
     facts_added: tuple[WorldFact, ...] = ()
     evidence: tuple[KnowledgeHit, ...] = ()
+    suggestions: tuple[KnowledgeSuggestion, ...] = ()
     miss: bool = False
     err: str = ""
     confidence: float = 1.0
@@ -68,6 +92,7 @@ class DecodeOutcome:
         d = asdict(self)
         d["facts_added"] = [f.to_dict() for f in self.facts_added]
         d["evidence"] = [e.to_dict() for e in self.evidence]
+        d["suggestions"] = [s.to_dict() for s in self.suggestions]
         return d
 
 
